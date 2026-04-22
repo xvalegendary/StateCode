@@ -1,0 +1,13 @@
+node_modules/
+.turbo/
+dist/
+coverage/
+.env
+.DS_Store
+*.log
+target/
+.idea/
+.vscode/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock

@@ -1,0 +1,13 @@
+{
+  "users": [
+    {
+      "id": "175df551-5369-40c0-a63e-4227c724b039",
+      "email": "smoke71163@statecode.dev",
+      "handle": "smoke71163",
+      "first_name": "Smoke",
+      "last_name": "Test",
+      "password_hash": "$argon2id$v=19$m=19456,t=2,p=1$Q1sWPA4bMQg8cNliemFcfQ$bYxDzZed+jRQvaYshQMXY50nWCVPbJ+zY6MmOx2R6sI",
+      "created_at_unix": 1776855443
+    }
+  ]
+}
