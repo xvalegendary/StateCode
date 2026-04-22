@@ -6,6 +6,7 @@ coverage/
 .DS_Store
 *.log
 target/
+apps/auth-rs/data/*.db
 .idea/
 .vscode/
 pnpm-lock.yaml

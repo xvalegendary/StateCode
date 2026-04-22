@@ -9,28 +9,26 @@ service AuthService {
 }
 
 message RegisterRequest {
-  string email = 1;
+  string login = 1;
   string password = 2;
-  string handle = 3;
-  string first_name = 4;
-  string last_name = 5;
+  string username = 3;
 }
 
 message LoginRequest {
-  string email = 1;
+  string login = 1;
   string password = 2;
 }
 
 message AuthResponse {
   string user_id = 1;
-  string email = 2;
-  string handle = 3;
+  string login = 2;
+  string username = 3;
   string token = 4;
   string message = 5;
 }
 
 message PasswordResetRequest {
-  string email = 1;
+  string login = 1;
 }
 
 message PasswordResetResponse {

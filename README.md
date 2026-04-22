@@ -53,7 +53,7 @@ The current auth path works like this:
 1. The frontend submits login or registration data with `fetch`.
 2. `apps/api` accepts HTTP requests on `/auth/*`.
 3. `apps/api` forwards those requests to the Rust gRPC auth service.
-4. `apps/auth-rs` validates credentials, persists users, and returns auth payloads.
+4. `apps/auth-rs` validates credentials, initializes SQLite on startup, persists users, and returns auth payloads.
 5. The frontend stores the returned auth payload in `localStorage`.
 
 ## Tech Stack
@@ -122,7 +122,7 @@ Auth-related runtime values used today:
 
 - `API_PORT`: HTTP port for `apps/api`
 - `AUTH_GRPC_ADDR`: target gRPC address used by the API gateway
-- `AUTH_DATA_PATH`: optional JSON file path for local auth persistence
+- `AUTH_DB_PATH`: optional SQLite database path for local auth persistence
 - `ALLOWED_ORIGINS`: comma-separated list of allowed browser origins for the API gateway
 - `NEXT_PUBLIC_API_URL`: frontend API base URL, defaults to `http://localhost:4000`
 
@@ -134,6 +134,11 @@ Current HTTP endpoints exposed by `apps/api`:
 - `POST /auth/login`
 - `POST /auth/password-reset`
 - `GET /health`
+
+Current auth payloads use:
+
+- `login`: account login used for sign-in and recovery
+- `username`: public-facing `@username`
 
 Current gRPC service defined in [packages/contracts/proto/auth.proto](./packages/contracts/proto/auth.proto):
 
@@ -188,7 +193,7 @@ tests/
 
 ## Notes
 
-- `apps/auth-rs` currently persists users to a local JSON file for development.
+- `apps/auth-rs` auto-creates `apps/auth-rs/data/auth.db` and initializes the `users` table on first start.
 - The worker and executor layers are still placeholders compared to the auth stack.
 - The web app is already wired to the live auth service, not a mock.
 

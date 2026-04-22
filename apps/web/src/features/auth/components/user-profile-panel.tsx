@@ -1,0 +1,151 @@
+"use client";
+
+import Link from "next/link";
+import { Eye, EyeOff, LogOut, Trophy } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import {
+  AuthSession,
+  getRankPalette,
+  rankSystemSummary,
+  ratingSystemSummary
+} from "@/features/auth/lib/session";
+import { cn } from "@/lib/utils";
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  }).format(new Date(value));
+}
+
+function formatRelative(value: string) {
+  const diffMinutes = Math.max(1, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+
+  return `${Math.round(diffHours / 24)}d ago`;
+}
+
+export function UserProfilePanel({
+  session,
+  onToggleVisibility,
+  onLogout
+}: {
+  session: AuthSession;
+  onToggleVisibility: () => void;
+  onLogout: () => void;
+}) {
+  const { profile } = session;
+  const avatarLabel = session.username.replace("@", "").slice(0, 2).toUpperCase();
+
+  return (
+    <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-[340px] border bg-background p-4 shadow-2xl backdrop-blur-xl">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-11 items-center justify-center border bg-muted text-sm font-semibold">
+            {avatarLabel}
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">{session.username}</span>
+              <Badge variant="outline" className={cn("border-none px-0 text-xs", getRankPalette(profile.rank))}>
+                {profile.rank}
+              </Badge>
+            </div>
+            <div className="text-xs text-muted-foreground">{profile.profileUrl}</div>
+          </div>
+        </div>
+        <Button variant="ghost" className="rounded-none px-2" onClick={onLogout}>
+          <LogOut className="size-4" />
+        </Button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 border-y py-4 text-sm">
+        <div>
+          <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tournaments</div>
+          <div className="mt-1 font-semibold">{profile.tournamentsPlayed}</div>
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Solved</div>
+          <div className="mt-1 font-semibold">{profile.solvedProblems}</div>
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Leaderboard</div>
+          <div className="mt-1 font-semibold">
+            {profile.leaderboardPosition ? `#${profile.leaderboardPosition}` : "Pending"}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Rating</div>
+          <div className="mt-1 font-semibold">
+            {profile.leaderboardRating ?? `${profile.calibrationSolved}/${profile.calibrationTarget}`}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3 py-4 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="font-medium">Profile visibility</div>
+            <div className="text-xs text-muted-foreground">
+              {profile.visibility === "public" ? "Visible by leaderboard and direct link." : "Visible only to you."}
+            </div>
+          </div>
+          <Button variant="outline" className="rounded-none" onClick={onToggleVisibility}>
+            {profile.visibility === "public" ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            {profile.visibility === "public" ? "Set private" : "Set public"}
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+          <div>
+            <div className="uppercase tracking-[0.18em]">Last online</div>
+            <div className="mt-1 text-sm text-foreground">{formatRelative(profile.lastOnlineAt)}</div>
+          </div>
+          <div>
+            <div className="uppercase tracking-[0.18em]">Joined</div>
+            <div className="mt-1 text-sm text-foreground">{formatDate(profile.joinedAt)}</div>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3 py-4">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Trophy className="size-4" />
+          Rating system
+        </div>
+        <div className="space-y-2 text-xs text-muted-foreground">
+          {ratingSystemSummary.map((item) => (
+            <div key={item}>{item}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+          {rankSystemSummary.map((item) => (
+            <div key={item.rank} className="flex items-center justify-between gap-3 border-b pb-1">
+              <span className={cn("font-medium", getRankPalette(item.rank))}>{item.rank}</span>
+              <span className="text-muted-foreground">{item.minRating}+</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 pt-2">
+        <Button variant="outline" className="w-full rounded-none" asChild>
+          <Link href={`/${session.username}`}>Open profile</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}

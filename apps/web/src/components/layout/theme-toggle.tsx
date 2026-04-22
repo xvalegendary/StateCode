@@ -3,6 +3,7 @@
 import { Moon, SunMedium } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type Theme = "light" | "dark";
 
@@ -12,7 +13,7 @@ function applyTheme(theme: Theme) {
   root.style.colorScheme = theme;
 }
 
-export function ThemeToggle() {
+export function ThemeToggle({ className }: { className?: string }) {
   const [theme, setTheme] = useState<Theme>("light");
   const [mounted, setMounted] = useState(false);
 
@@ -37,6 +38,7 @@ export function ThemeToggle() {
       type="button"
       variant="outline"
       size="icon"
+      className={cn(className)}
       onClick={() => {
         applyTheme(nextTheme);
         window.localStorage.setItem("statecode-theme", nextTheme);

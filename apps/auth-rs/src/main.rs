@@ -1,6 +1,5 @@
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -9,8 +8,8 @@ use argon2::{
     Argon2,
 };
 use rand_core::OsRng;
-use serde::{Deserialize, Serialize};
-use tokio::{fs, sync::Mutex};
+use rusqlite::{params, Connection, OptionalExtension};
+use tokio::fs;
 use tonic::{transport::Server, Request, Response, Status};
 use uuid::Uuid;
 
@@ -23,26 +22,17 @@ use auth::{
     AuthResponse, LoginRequest, PasswordResetRequest, PasswordResetResponse, RegisterRequest,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 struct StoredUser {
     id: String,
-    email: String,
-    handle: String,
-    first_name: String,
-    last_name: String,
+    login: String,
+    username: String,
     password_hash: String,
-    created_at_unix: u64,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct PersistedStore {
-    users: Vec<StoredUser>,
 }
 
 #[derive(Debug, Clone)]
 struct AuthState {
-    data_path: PathBuf,
-    store: Arc<Mutex<PersistedStore>>,
+    db_path: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -51,39 +41,32 @@ struct AuthGrpcService {
 }
 
 impl AuthState {
-    async fn load(data_path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-        if let Some(parent) = data_path.parent() {
+    async fn initialize(db_path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+        if let Some(parent) = db_path.parent() {
             fs::create_dir_all(parent).await?;
         }
 
-        let store = if fs::try_exists(&data_path).await? {
-            let raw = fs::read_to_string(&data_path).await?;
-            serde_json::from_str::<PersistedStore>(&raw).unwrap_or_default()
-        } else {
-            PersistedStore::default()
-        };
+        let connection = Connection::open(&db_path)?;
+        connection.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                login TEXT NOT NULL UNIQUE,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at_unix INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_users_login ON users(login);
+            CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+            ",
+        )?;
 
-        Ok(Self {
-            data_path,
-            store: Arc::new(Mutex::new(store)),
-        })
+        Ok(Self { db_path })
     }
 
-    async fn save(&self, snapshot: &PersistedStore) -> Result<(), Status> {
-        if let Some(parent) = self.data_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|_| Status::internal("failed to create auth data directory"))?;
-        }
-
-        let raw = serde_json::to_string_pretty(snapshot)
-            .map_err(|_| Status::internal("failed to serialize auth store"))?;
-
-        fs::write(&self.data_path, raw)
-            .await
-            .map_err(|_| Status::internal("failed to persist auth store"))?;
-
-        Ok(())
+    fn connection(&self) -> Result<Connection, Status> {
+        Connection::open(&self.db_path)
+            .map_err(|_| Status::internal("failed to open auth database"))
     }
 }
 
@@ -102,18 +85,25 @@ impl AuthGrpcService {
 
         Argon2::default()
             .verify_password(password.as_bytes(), &parsed_hash)
-            .map_err(|_| Status::unauthenticated("invalid email or password"))
+            .map_err(|_| Status::unauthenticated("invalid login or password"))
+    }
+
+    fn normalize_login(value: &str) -> String {
+        value.trim().to_lowercase()
+    }
+
+    fn normalize_username(value: &str) -> String {
+        let trimmed = value.trim().trim_start_matches('@').to_lowercase();
+        format!("@{trimmed}")
     }
 
     fn validate_register(request: &RegisterRequest) -> Result<(), Status> {
-        if request.email.trim().is_empty()
+        if request.login.trim().is_empty()
             || request.password.trim().is_empty()
-            || request.handle.trim().is_empty()
-            || request.first_name.trim().is_empty()
-            || request.last_name.trim().is_empty()
+            || request.username.trim().is_empty()
         {
             return Err(Status::invalid_argument(
-                "all registration fields are required",
+                "login, username, and password are required",
             ));
         }
 
@@ -123,12 +113,16 @@ impl AuthGrpcService {
             ));
         }
 
+        if request.login.contains(' ') {
+            return Err(Status::invalid_argument("login must not contain spaces"));
+        }
+
         Ok(())
     }
 
     fn validate_login(request: &LoginRequest) -> Result<(), Status> {
-        if request.email.trim().is_empty() || request.password.trim().is_empty() {
-            return Err(Status::invalid_argument("email and password are required"));
+        if request.login.trim().is_empty() || request.password.trim().is_empty() {
+            return Err(Status::invalid_argument("login and password are required"));
         }
 
         Ok(())
@@ -137,11 +131,33 @@ impl AuthGrpcService {
     fn auth_response(user: &StoredUser, message: &str) -> AuthResponse {
         AuthResponse {
             user_id: user.id.clone(),
-            email: user.email.clone(),
-            handle: user.handle.clone(),
+            login: user.login.clone(),
+            username: user.username.clone(),
             token: format!("sc_{}", Uuid::new_v4().simple()),
             message: message.to_string(),
         }
+    }
+
+    fn get_user_by_login(connection: &Connection, login: &str) -> Result<Option<StoredUser>, Status> {
+        connection
+            .query_row(
+                "
+                SELECT id, login, username, password_hash
+                FROM users
+                WHERE login = ?1
+                ",
+                params![login],
+                |row| {
+                    Ok(StoredUser {
+                        id: row.get(0)?,
+                        login: row.get(1)?,
+                        username: row.get(2)?,
+                        password_hash: row.get(3)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|_| Status::internal("failed to query auth database"))
     }
 }
 
@@ -154,56 +170,65 @@ impl AuthService for AuthGrpcService {
         let payload = request.into_inner();
         Self::validate_register(&payload)?;
 
-        let normalized_email = payload.email.trim().to_lowercase();
-        let normalized_handle = payload.handle.trim().to_lowercase();
+        let login = Self::normalize_login(&payload.login);
+        let username = Self::normalize_username(&payload.username);
         let password_hash = Self::hash_password(payload.password.trim())?;
+        let connection = self.state.connection()?;
 
-        let snapshot = {
-            let mut store = self.state.store.lock().await;
+        let existing_login: Option<String> = connection
+            .query_row(
+                "SELECT login FROM users WHERE login = ?1",
+                params![login],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|_| Status::internal("failed to query auth database"))?;
 
-            if store
-                .users
-                .iter()
-                .any(|user| user.email == normalized_email)
-            {
-                return Err(Status::already_exists("email is already registered"));
-            }
+        if existing_login.is_some() {
+            return Err(Status::already_exists("login is already registered"));
+        }
 
-            if store
-                .users
-                .iter()
-                .any(|user| user.handle == normalized_handle)
-            {
-                return Err(Status::already_exists("handle is already taken"));
-            }
+        let existing_username: Option<String> = connection
+            .query_row(
+                "SELECT username FROM users WHERE username = ?1",
+                params![username],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|_| Status::internal("failed to query auth database"))?;
 
-            let user = StoredUser {
-                id: Uuid::new_v4().to_string(),
-                email: normalized_email,
-                handle: normalized_handle,
-                first_name: payload.first_name.trim().to_string(),
-                last_name: payload.last_name.trim().to_string(),
-                password_hash,
-                created_at_unix: SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs(),
-            };
+        if existing_username.is_some() {
+            return Err(Status::already_exists("username is already taken"));
+        }
 
-            store.users.push(user);
-            store.clone()
+        let user = StoredUser {
+            id: Uuid::new_v4().to_string(),
+            login,
+            username,
+            password_hash,
         };
 
-        self.state.save(&snapshot).await?;
-
-        let created_user = snapshot
-            .users
-            .last()
-            .cloned()
-            .ok_or_else(|| Status::internal("created user missing after save"))?;
+        connection
+            .execute(
+                "
+                INSERT INTO users (id, login, username, password_hash, created_at_unix)
+                VALUES (?1, ?2, ?3, ?4, ?5)
+                ",
+                params![
+                    user.id,
+                    user.login,
+                    user.username,
+                    user.password_hash,
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs() as i64
+                ],
+            )
+            .map_err(|_| Status::internal("failed to insert user into auth database"))?;
 
         Ok(Response::new(Self::auth_response(
-            &created_user,
+            &user,
             "registration successful",
         )))
     }
@@ -215,17 +240,10 @@ impl AuthService for AuthGrpcService {
         let payload = request.into_inner();
         Self::validate_login(&payload)?;
 
-        let normalized_email = payload.email.trim().to_lowercase();
-
-        let user = {
-            let store = self.state.store.lock().await;
-            store
-                .users
-                .iter()
-                .find(|user| user.email == normalized_email)
-                .cloned()
-        }
-        .ok_or_else(|| Status::unauthenticated("invalid email or password"))?;
+        let login = Self::normalize_login(&payload.login);
+        let connection = self.state.connection()?;
+        let user = Self::get_user_by_login(&connection, &login)?
+            .ok_or_else(|| Status::unauthenticated("invalid login or password"))?;
 
         Self::verify_password(payload.password.trim(), &user.password_hash)?;
 
@@ -241,23 +259,23 @@ impl AuthService for AuthGrpcService {
     ) -> Result<Response<PasswordResetResponse>, Status> {
         let payload = request.into_inner();
 
-        if payload.email.trim().is_empty() {
-            return Err(Status::invalid_argument("email is required"));
+        if payload.login.trim().is_empty() {
+            return Err(Status::invalid_argument("login is required"));
         }
 
         Ok(Response::new(PasswordResetResponse {
-            message: "If an account exists for this email, a recovery link has been prepared."
+            message: "If an account exists for this login, a recovery link has been prepared."
                 .to_string(),
         }))
     }
 }
 
-fn resolve_data_path() -> PathBuf {
+fn resolve_db_path() -> PathBuf {
     let default_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("data")
-        .join("users.json");
+        .join("auth.db");
 
-    std::env::var("AUTH_DATA_PATH")
+    std::env::var("AUTH_DB_PATH")
         .map(PathBuf::from)
         .unwrap_or(default_path)
 }
@@ -265,11 +283,15 @@ fn resolve_data_path() -> PathBuf {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let address = std::env::var("AUTH_GRPC_ADDR").unwrap_or_else(|_| "127.0.0.1:50051".to_string());
+    let db_path = resolve_db_path();
     let service = AuthGrpcService {
-        state: AuthState::load(resolve_data_path()).await?,
+        state: AuthState::initialize(db_path.clone()).await?,
     };
 
-    println!("[auth-rs] gRPC auth server listening on {address}");
+    println!(
+        "[auth-rs] gRPC auth server listening on {address}; sqlite db: {}",
+        db_path.display()
+    );
 
     Server::builder()
         .add_service(AuthServiceServer::new(service))

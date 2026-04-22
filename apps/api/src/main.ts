@@ -5,26 +5,24 @@ import protoLoader from "@grpc/proto-loader";
 import { apiApp } from "./app/app.js";
 
 type LoginBody = {
-  email?: string;
+  login?: string;
   password?: string;
 };
 
 type RegisterBody = {
-  email?: string;
+  login?: string;
   password?: string;
-  handle?: string;
-  firstName?: string;
-  lastName?: string;
+  username?: string;
 };
 
 type ResetBody = {
-  email?: string;
+  login?: string;
 };
 
 type AuthResponse = {
   user_id: string;
-  email: string;
-  handle: string;
+  login: string;
+  username: string;
   token: string;
   message: string;
 };
@@ -36,8 +34,8 @@ type PasswordResetResponse = {
 type GrpcAuthResponse = {
   user_id?: string;
   userId?: string;
-  email?: string;
-  handle?: string;
+  login?: string;
+  username?: string;
   token?: string;
   message?: string;
 };
@@ -45,26 +43,22 @@ type GrpcAuthResponse = {
 type ProtoClient = grpc.Client & {
   register(
     request: {
-      email: string;
+      login: string;
       password: string;
-      handle: string;
-      first_name?: string;
-      last_name?: string;
-      firstName?: string;
-      lastName?: string;
+      username: string;
     },
     callback: (error: grpc.ServiceError | null, response: GrpcAuthResponse) => void
   ): void;
   login(
     request: {
-      email: string;
+      login: string;
       password: string;
     },
     callback: (error: grpc.ServiceError | null, response: GrpcAuthResponse) => void
   ): void;
   requestPasswordReset(
     request: {
-      email: string;
+      login: string;
     },
     callback: (error: grpc.ServiceError | null, response: PasswordResetResponse) => void
   ): void;
@@ -170,8 +164,8 @@ function grpcCall<TRequest, TResponse>(
 function normalizeAuthResponse(response: GrpcAuthResponse): AuthResponse {
   return {
     user_id: response.user_id ?? response.userId ?? "",
-    email: response.email ?? "",
-    handle: response.handle ?? "",
+    login: response.login ?? "",
+    username: response.username ?? "",
     token: response.token ?? "",
     message: response.message ?? ""
   };
@@ -207,13 +201,9 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/auth/register") {
       const body = await readJson<RegisterBody>(request);
       const result = await grpcCall(authClient.register.bind(authClient), {
-        email: body.email ?? "",
+        login: body.login ?? "",
         password: body.password ?? "",
-        handle: body.handle ?? "",
-        first_name: body.firstName ?? "",
-        last_name: body.lastName ?? "",
-        firstName: body.firstName ?? "",
-        lastName: body.lastName ?? ""
+        username: body.username ?? ""
       });
 
       writeJson(request, response, 201, normalizeAuthResponse(result));
@@ -223,7 +213,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/auth/login") {
       const body = await readJson<LoginBody>(request);
       const result = await grpcCall(authClient.login.bind(authClient), {
-        email: body.email ?? "",
+        login: body.login ?? "",
         password: body.password ?? ""
       });
 
@@ -234,7 +224,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/auth/password-reset") {
       const body = await readJson<ResetBody>(request);
       const result = await grpcCall(authClient.requestPasswordReset.bind(authClient), {
-        email: body.email ?? ""
+        login: body.login ?? ""
       });
 
       writeJson(request, response, 200, result);

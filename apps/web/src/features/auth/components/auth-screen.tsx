@@ -7,14 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { persistAuthSession } from "@/features/auth/lib/session";
 import { cn } from "@/lib/utils";
 
 type AuthMode = "login" | "signup";
 
 type AuthResponse = {
   user_id: string;
-  email: string;
-  handle: string;
+  login: string;
+  username: string;
   token: string;
   message: string;
 };
@@ -30,17 +31,15 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
   const [direction, setDirection] = useState<"forward" | "backward">("forward");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ type: "error" | "success"; text: string } | null>(null);
-  const [loginEmail, setLoginEmail] = useState("");
+  const [loginValue, setLoginValue] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [registerForm, setRegisterForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    handle: "",
+    login: "",
+    username: "",
     password: "",
     confirmPassword: ""
   });
-  const [resetEmail, setResetEmail] = useState("");
+  const [resetLogin, setResetLogin] = useState("");
   const timeoutRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
 
@@ -88,7 +87,7 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
   };
 
   const handleAuthSuccess = (payload: AuthResponse) => {
-    window.localStorage.setItem("statecode-auth", JSON.stringify(payload));
+    persistAuthSession(payload);
     setNotice({ type: "success", text: payload.message });
     router.push("/");
   };
@@ -105,7 +104,7 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          email: loginEmail,
+          login: loginValue,
           password: loginPassword
         })
       });
@@ -148,7 +147,11 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(registerForm)
+        body: JSON.stringify({
+          login: registerForm.login,
+          username: registerForm.username,
+          password: registerForm.password
+        })
       });
 
       const payload = (await response.json()) as AuthResponse | { error?: string };
@@ -183,7 +186,7 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          email: resetEmail
+          login: resetLogin
         })
       });
 
@@ -278,12 +281,12 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
                   </div>
 
                   <label className="space-y-2">
-                    <span className="text-sm font-medium">Email</span>
+                    <span className="text-sm font-medium">Login</span>
                     <Input
-                      type="email"
-                      placeholder="name@example.com"
-                      value={loginEmail}
-                      onChange={(event) => setLoginEmail(event.target.value)}
+                      type="text"
+                      placeholder="statecode_login"
+                      value={loginValue}
+                      onChange={(event) => setLoginValue(event.target.value)}
                     />
                   </label>
 
@@ -336,18 +339,18 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
                         <div>
                           <div className="text-sm font-medium">Reset password</div>
                           <div className="text-xs text-muted-foreground">
-                            We will send a recovery link to your email.
+                            Recovery is prepared for the login you enter below.
                           </div>
                         </div>
                       </div>
 
                       <label className="space-y-2">
-                        <span className="text-sm font-medium">Recovery email</span>
+                        <span className="text-sm font-medium">Account login</span>
                         <Input
-                          type="email"
-                          placeholder="name@example.com"
-                          value={resetEmail}
-                          onChange={(event) => setResetEmail(event.target.value)}
+                          type="text"
+                          placeholder="statecode_login"
+                          value={resetLogin}
+                          onChange={(event) => setResetLogin(event.target.value)}
                         />
                       </label>
 
@@ -382,63 +385,31 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
                     </p>
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="space-y-2">
-                      <span className="text-sm font-medium">First name</span>
-                      <Input
-                        type="text"
-                        placeholder="Amina"
-                        value={registerForm.firstName}
-                        onChange={(event) =>
-                          setRegisterForm((current) => ({
-                            ...current,
-                            firstName: event.target.value
-                          }))
-                        }
-                      />
-                    </label>
-
-                    <label className="space-y-2">
-                      <span className="text-sm font-medium">Last name</span>
-                      <Input
-                        type="text"
-                        placeholder="Karimova"
-                        value={registerForm.lastName}
-                        onChange={(event) =>
-                          setRegisterForm((current) => ({
-                            ...current,
-                            lastName: event.target.value
-                          }))
-                        }
-                      />
-                    </label>
-                  </div>
-
                   <label className="space-y-2">
-                    <span className="text-sm font-medium">Email</span>
+                    <span className="text-sm font-medium">Login</span>
                     <Input
-                      type="email"
-                      placeholder="name@example.com"
-                      value={registerForm.email}
+                      type="text"
+                      placeholder="statecode_login"
+                      value={registerForm.login}
                       onChange={(event) =>
                         setRegisterForm((current) => ({
                           ...current,
-                          email: event.target.value
+                          login: event.target.value
                         }))
                       }
                     />
                   </label>
 
                   <label className="space-y-2">
-                    <span className="text-sm font-medium">Handle</span>
+                    <span className="text-sm font-medium">Username</span>
                     <Input
                       type="text"
-                      placeholder="stackrunner"
-                      value={registerForm.handle}
+                      placeholder="@statecoder"
+                      value={registerForm.username}
                       onChange={(event) =>
                         setRegisterForm((current) => ({
                           ...current,
-                          handle: event.target.value
+                          username: event.target.value
                         }))
                       }
                     />
