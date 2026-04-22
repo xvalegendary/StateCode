@@ -13,16 +13,29 @@ import {
 } from "@/features/auth/lib/session";
 import { cn } from "@/lib/utils";
 
-function formatDate(value: string) {
+function parseDate(value: string | null | undefined) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDate(value: string | null | undefined) {
+  const date = parseDate(value);
+  if (!date) return "—";
+
   return new Intl.DateTimeFormat("en", {
     month: "short",
     day: "numeric",
     year: "numeric"
-  }).format(new Date(value));
+  }).format(date);
 }
 
-function formatRelative(value: string) {
-  const diffMinutes = Math.max(1, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+function formatRelative(value: string | null | undefined) {
+  const date = parseDate(value);
+  if (!date) return "—";
+
+  const diffMinutes = Math.max(1, Math.round((Date.now() - date.getTime()) / 60000));
 
   if (diffMinutes < 60) {
     return `${diffMinutes}m ago`;
@@ -62,6 +75,7 @@ export function UserProfilePanel({
                 {profile.rank}
               </Badge>
             </div>
+            <div className="text-xs text-muted-foreground">{session.title || session.role}</div>
             <div className="text-xs text-muted-foreground">{profile.profileUrl}</div>
           </div>
         </div>
@@ -88,7 +102,9 @@ export function UserProfilePanel({
         <div>
           <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Rating</div>
           <div className="mt-1 font-semibold">
-            {profile.leaderboardRating ?? `${profile.calibrationSolved}/${profile.calibrationTarget}`}
+            {profile.rank === "Calibrating"
+              ? `${profile.calibrationSolved}/${profile.calibrationTarget}`
+              : profile.leaderboardRating}
           </div>
         </div>
       </div>
@@ -146,6 +162,11 @@ export function UserProfilePanel({
           <Link href={`/${session.username}`}>Open profile</Link>
         </Button>
       </div>
+      {session.role === "admin" || session.role === "moderator" ? (
+        <Button variant="outline" className="mt-2 w-full rounded-none" asChild>
+          <Link href="/admin">Open admin panel</Link>
+        </Button>
+      ) : null}
     </div>
   );
 }

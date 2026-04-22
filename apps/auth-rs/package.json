@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "cargo build --manifest-path Cargo.toml",
-    "dev": "cargo run --manifest-path Cargo.toml",
+    "build": "cargo build --target-dir .cargo-artifacts --manifest-path Cargo.toml",
+    "dev": "cargo run --target-dir .cargo-artifacts --manifest-path Cargo.toml",
     "lint": "cargo fmt --manifest-path Cargo.toml --check",
-    "test": "cargo test --manifest-path Cargo.toml",
-    "typecheck": "cargo check --manifest-path Cargo.toml"
+    "test": "cargo test --target-dir .cargo-artifacts --manifest-path Cargo.toml",
+    "typecheck": "cargo check --target-dir .cargo-artifacts --manifest-path Cargo.toml"
   }
 }

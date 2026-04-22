@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Crown, Flame, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,10 +12,35 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
-import { leaderboardEntries } from "@/features/platform/data/catalog";
+import { leaderboardEntries as fallbackEntries } from "@/features/platform/data/catalog";
+import {
+  fetchLeaderboard,
+  LeaderboardEntry
+} from "@/features/platform/lib/platform-api";
+
+const seededFallback: LeaderboardEntry[] = fallbackEntries.map((entry) => ({
+  rank: entry.rank,
+  username: `@${entry.handle}`,
+  title: "",
+  rating: entry.rating,
+  solved_problems: entry.solved,
+  tournaments_played: entry.streak
+}));
 
 export function LeaderboardScreen() {
-  const leader = leaderboardEntries[0];
+  const [entries, setEntries] = useState<LeaderboardEntry[]>(seededFallback);
+
+  useEffect(() => {
+    fetchLeaderboard()
+      .then((payload) => {
+        if (payload.entries.length > 0) {
+          setEntries(payload.entries);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const leader = entries[0] ?? seededFallback[0];
 
   return (
     <main className="min-h-screen px-6 py-28 md:px-8 lg:px-10">
@@ -38,7 +66,7 @@ export function LeaderboardScreen() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-1">
-                <div className="text-lg font-semibold">{leader.handle}</div>
+                <div className="text-lg font-semibold">{leader.username}</div>
                 <div className="text-xs text-muted-foreground">{leader.rating} rating</div>
               </CardContent>
             </Card>
@@ -46,12 +74,12 @@ export function LeaderboardScreen() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-sm">
                   <Flame className="size-4" />
-                  Best streak
+                  Competitive titles
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-1">
-                <div className="text-lg font-semibold">32 days</div>
-                <div className="text-xs text-muted-foreground">without breaking submissions</div>
+                <div className="text-lg font-semibold">{entries.filter((entry) => entry.title).length}</div>
+                <div className="text-xs text-muted-foreground">players with admin-assigned titles</div>
               </CardContent>
             </Card>
             <Card className="border bg-card">
@@ -62,8 +90,8 @@ export function LeaderboardScreen() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-1">
-                <div className="text-lg font-semibold">18,420</div>
-                <div className="text-xs text-muted-foreground">active competitors</div>
+                <div className="text-lg font-semibold">{entries.length}</div>
+                <div className="text-xs text-muted-foreground">visible ranked competitors</div>
               </CardContent>
             </Card>
           </div>
@@ -78,21 +106,21 @@ export function LeaderboardScreen() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Rank</TableHead>
-                  <TableHead>Handle</TableHead>
-                  <TableHead>Country</TableHead>
+                  <TableHead>Username</TableHead>
+                  <TableHead>Title</TableHead>
                   <TableHead>Solved</TableHead>
-                  <TableHead>Streak</TableHead>
+                  <TableHead>Tournaments</TableHead>
                   <TableHead className="text-right">Rating</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {leaderboardEntries.map((entry) => (
-                  <TableRow key={entry.handle}>
+                {entries.map((entry) => (
+                  <TableRow key={`${entry.rank}-${entry.username}`}>
                     <TableCell className="font-medium">{entry.rank}</TableCell>
-                    <TableCell>{entry.handle}</TableCell>
-                    <TableCell>{entry.country}</TableCell>
-                    <TableCell>{entry.solved}</TableCell>
-                    <TableCell>{entry.streak}d</TableCell>
+                    <TableCell>{entry.username}</TableCell>
+                    <TableCell>{entry.title || "Ranked"}</TableCell>
+                    <TableCell>{entry.solved_problems}</TableCell>
+                    <TableCell>{entry.tournaments_played}</TableCell>
                     <TableCell className="text-right">{entry.rating}</TableCell>
                   </TableRow>
                 ))}

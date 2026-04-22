@@ -10,9 +10,13 @@ import {
   AuthSession,
   clearAuthSession,
   readAuthSession,
+  syncStoredSession,
   subscribeToAuthSession,
-  updateStoredProfile
 } from "@/features/auth/lib/session";
+import {
+  fetchCurrentUser,
+  updateProfileVisibility
+} from "@/features/platform/lib/platform-api";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +24,7 @@ const navItems = [
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/problems", label: "Problems" },
   { href: "/solve", label: "Solve" }
-];
+] as const;
 
 export function Navbar() {
   const router = useRouter();
@@ -36,6 +40,18 @@ export function Navbar() {
     };
 
     syncSession();
+    const current = readAuthSession();
+    if (current?.token) {
+      fetchCurrentUser(current.token)
+        .then((record) => {
+          const next = syncStoredSession(record);
+          if (next) {
+            setSession(next);
+          }
+        })
+        .catch(() => undefined);
+    }
+
     return subscribeToAuthSession(syncSession);
   }, []);
 
@@ -65,15 +81,14 @@ export function Navbar() {
     return () => window.removeEventListener("mousedown", onPointerDown);
   }, [profileOpen]);
 
-  const handleToggleVisibility = () => {
-    const next = updateStoredProfile((current) => ({
-      ...current,
-      profile: {
-        ...current.profile,
-        visibility: current.profile.visibility === "public" ? "private" : "public"
-      }
-    }));
+  const handleToggleVisibility = async () => {
+    if (!session?.token) {
+      return;
+    }
 
+    const nextVisibility = session.profile.visibility === "public" ? "private" : "public";
+    const record = await updateProfileVisibility(session.token, nextVisibility);
+    const next = syncStoredSession(record);
     if (next) {
       setSession(next);
     }
@@ -87,6 +102,10 @@ export function Navbar() {
   };
 
   const avatarLabel = session?.username.replace("@", "").slice(0, 2).toUpperCase() ?? "SC";
+  const visibleNavItems =
+    session?.role === "admin" || session?.role === "moderator"
+      ? [...navItems, { href: "/admin", label: "Admin" as const }]
+      : navItems;
 
   return (
     <header className="sticky top-0 z-50 px-4 pt-4">
@@ -105,7 +124,7 @@ export function Navbar() {
           </Link>
 
           <nav className="flex flex-wrap items-center gap-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive = pathname === item.href;
 
               return (

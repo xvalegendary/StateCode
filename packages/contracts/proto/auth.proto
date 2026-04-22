@@ -1,12 +1,27 @@
 syntax = "proto3";
 
-package statecode.auth.v1;
+package statecode.platform.v1;
 
-service AuthService {
+service PlatformService {
   rpc Register(RegisterRequest) returns (AuthResponse);
   rpc Login(LoginRequest) returns (AuthResponse);
   rpc RequestPasswordReset(PasswordResetRequest) returns (PasswordResetResponse);
+  rpc GetCurrentUser(SessionRequest) returns (UserRecord);
+  rpc UpdateProfileVisibility(UpdateProfileVisibilityRequest) returns (UserRecord);
+  rpc GetPublicProfile(ProfileHandleRequest) returns (UserRecord);
+  rpc GetLeaderboard(Empty) returns (LeaderboardResponse);
+  rpc ListProblems(Empty) returns (ProblemCatalogResponse);
+  rpc ListUsers(AdminSessionRequest) returns (UserListResponse);
+  rpc SetUserBanState(AdminSetUserBanStateRequest) returns (AdminActionResponse);
+  rpc SetUserLeaderboardState(AdminSetUserLeaderboardStateRequest) returns (AdminActionResponse);
+  rpc ResetUserCompetitiveState(AdminUserTargetRequest) returns (AdminActionResponse);
+  rpc AssignUserTitle(AdminAssignUserTitleRequest) returns (AdminActionResponse);
+  rpc SetUserRole(AdminSetUserRoleRequest) returns (AdminActionResponse);
+  rpc ListAdminProblems(AdminSessionRequest) returns (ProblemCatalogResponse);
+  rpc CreateProblem(AdminCreateProblemRequest) returns (AdminProblemActionResponse);
 }
+
+message Empty {}
 
 message RegisterRequest {
   string login = 1;
@@ -19,18 +34,160 @@ message LoginRequest {
   string password = 2;
 }
 
-message AuthResponse {
-  string user_id = 1;
-  string login = 2;
-  string username = 3;
-  string token = 4;
-  string message = 5;
-}
-
 message PasswordResetRequest {
   string login = 1;
 }
 
 message PasswordResetResponse {
   string message = 1;
+}
+
+message SessionRequest {
+  string token = 1;
+}
+
+message AdminSessionRequest {
+  string token = 1;
+}
+
+message ProfileHandleRequest {
+  string handle = 1;
+}
+
+message UpdateProfileVisibilityRequest {
+  string token = 1;
+  string visibility = 2;
+}
+
+message AuthResponse {
+  string user_id = 1;
+  string login = 2;
+  string email = 3;
+  string username = 4;
+  string token = 5;
+  string message = 6;
+  string role = 7;
+  string title = 8;
+  string visibility = 9;
+  int32 tournaments_played = 10;
+  int32 solved_problems = 11;
+  int32 calibration_solved = 12;
+  int32 calibration_target = 13;
+  int32 leaderboard_position = 14;
+  int32 leaderboard_rating = 15;
+  string rank = 16;
+  string last_online_at = 17;
+  string joined_at = 18;
+  bool leaderboard_hidden = 19;
+  bool is_banned = 20;
+  string profile_url = 21;
+}
+
+message UserRecord {
+  string user_id = 1;
+  string login = 2;
+  string email = 3;
+  string username = 4;
+  string role = 5;
+  string title = 6;
+  string visibility = 7;
+  int32 tournaments_played = 8;
+  int32 solved_problems = 9;
+  int32 calibration_solved = 10;
+  int32 calibration_target = 11;
+  int32 leaderboard_position = 12;
+  int32 leaderboard_rating = 13;
+  string rank = 14;
+  string last_online_at = 15;
+  string joined_at = 16;
+  bool leaderboard_hidden = 17;
+  bool is_banned = 18;
+  string profile_url = 19;
+}
+
+message LeaderboardEntry {
+  int32 rank = 1;
+  string username = 2;
+  string title = 3;
+  int32 rating = 4;
+  int32 solved_problems = 5;
+  int32 tournaments_played = 6;
+}
+
+message LeaderboardResponse {
+  repeated LeaderboardEntry entries = 1;
+}
+
+message ProblemRecord {
+  string problem_id = 1;
+  string slug = 2;
+  string title = 3;
+  string category = 4;
+  int32 difficulty = 5;
+  string status = 6;
+  int32 solved_count = 7;
+  string time_limit = 8;
+  string statement = 9;
+  string created_at = 10;
+  repeated string languages = 11;
+}
+
+message ProblemCatalogResponse {
+  repeated string categories = 1;
+  repeated ProblemRecord problems = 2;
+  repeated string supported_languages = 3;
+}
+
+message UserListResponse {
+  repeated UserRecord users = 1;
+}
+
+message AdminUserTargetRequest {
+  string token = 1;
+  string user_id = 2;
+}
+
+message AdminSetUserBanStateRequest {
+  string token = 1;
+  string user_id = 2;
+  bool is_banned = 3;
+}
+
+message AdminSetUserLeaderboardStateRequest {
+  string token = 1;
+  string user_id = 2;
+  bool leaderboard_hidden = 3;
+}
+
+message AdminAssignUserTitleRequest {
+  string token = 1;
+  string user_id = 2;
+  string title = 3;
+}
+
+message AdminSetUserRoleRequest {
+  string token = 1;
+  string user_id = 2;
+  string role = 3;
+}
+
+message AdminActionResponse {
+  string message = 1;
+  UserRecord user = 2;
+}
+
+message AdminCreateProblemRequest {
+  string token = 1;
+  string title = 2;
+  string category = 3;
+  int32 difficulty = 4;
+  string status = 5;
+  string time_limit = 6;
+  string statement = 7;
+  repeated string languages = 8;
+}
+
+message AdminProblemActionResponse {
+  string message = 1;
+  ProblemRecord problem = 2;
 }

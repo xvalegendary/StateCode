@@ -1,10 +1,42 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { ArrowUpRight, FolderCode, TimerReset } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { problems, problemCategories } from "@/features/platform/data/catalog";
+import {
+  problemCategories as fallbackCategories,
+  problems as fallbackProblems
+} from "@/features/platform/data/catalog";
+import { fetchProblems, ProblemRecord } from "@/features/platform/lib/platform-api";
+
+const seededProblems: ProblemRecord[] = fallbackProblems.map((problem) => ({
+  problem_id: problem.id,
+  slug: problem.title.toLowerCase().replaceAll(" ", "-"),
+  title: problem.title,
+  category: problem.category,
+  difficulty: problem.difficulty,
+  status: problem.status,
+  solved_count: problem.solvedCount,
+  time_limit: problem.timeLimit,
+  statement: problem.title,
+  created_at: new Date().toISOString()
+}));
 
 export function ProblemsScreen() {
+  const [categories, setCategories] = useState<string[]>(fallbackCategories);
+  const [problems, setProblems] = useState<ProblemRecord[]>(seededProblems);
+
+  useEffect(() => {
+    fetchProblems()
+      .then((payload) => {
+        setCategories(payload.categories);
+        setProblems(payload.problems);
+      })
+      .catch(() => undefined);
+  }, []);
+
   return (
     <main className="min-h-screen px-6 py-28 md:px-8 lg:px-10">
       <section className="mx-auto flex w-full max-w-[1320px] flex-col gap-8">
@@ -22,7 +54,7 @@ export function ProblemsScreen() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {problemCategories.slice(0, 6).map((category) => (
+            {categories.slice(0, 6).map((category) => (
               <Badge key={category} variant="outline">
                 {category}
               </Badge>
@@ -32,11 +64,11 @@ export function ProblemsScreen() {
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {problems.map((problem) => (
-            <Card key={problem.id} className="border bg-card">
+            <Card key={problem.problem_id} className="border bg-card">
               <CardHeader className="gap-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
-                    <div className="text-xs text-muted-foreground">{problem.id}</div>
+                    <div className="text-xs text-muted-foreground">{problem.problem_id}</div>
                     <CardTitle className="text-base">{problem.title}</CardTitle>
                   </div>
                   <Badge>{problem.status}</Badge>
@@ -50,14 +82,14 @@ export function ProblemsScreen() {
                 <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <TimerReset className="size-4" />
-                    {problem.timeLimit}
+                    {problem.time_limit}
                   </div>
                   <div className="flex items-center gap-2">
                     <FolderCode className="size-4" />
-                    {problem.solvedCount} solved
+                    {problem.solved_count} solved
                   </div>
                 </div>
-                <Button variant="outline" className="w-full justify-between" asChild>
+                <Button variant="outline" className="w-full justify-between rounded-none" asChild>
                   <a href="/solve">
                     Open in solve
                     <ArrowUpRight className="size-4" />

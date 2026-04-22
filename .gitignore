@@ -6,7 +6,11 @@ coverage/
 .DS_Store
 *.log
 target/
+apps/auth-rs/.cargo-artifacts/
+apps/auth-rs/.cargo-target/
 apps/auth-rs/data/*.db
+apps/auth-rs/data/admin-*.txt
+env-test.txt
 .idea/
 .vscode/
 pnpm-lock.yaml

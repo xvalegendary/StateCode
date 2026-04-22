@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 argon2 = "0.5"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 prost = "0.13"
 rand_core = { version = "0.6", features = ["std"] }
 rusqlite = { version = "0.32", features = ["bundled"] }

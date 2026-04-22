@@ -7,18 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { AuthPayload } from "@/features/auth/lib/session";
 import { persistAuthSession } from "@/features/auth/lib/session";
 import { cn } from "@/lib/utils";
 
 type AuthMode = "login" | "signup";
 
-type AuthResponse = {
-  user_id: string;
-  login: string;
-  username: string;
-  token: string;
-  message: string;
-};
+type AuthResponse = AuthPayload;
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
