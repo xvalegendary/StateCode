@@ -70,6 +70,40 @@ export type SandboxRunResult = {
   work_dir: string;
 };
 
+export type OperationsMetric = {
+  id: string;
+  label: string;
+  value: string;
+  delta: string;
+  progress: number;
+};
+
+export type OperationsQueueItem = {
+  id: string;
+  problem: string;
+  language: string;
+  status: string;
+  tests: string;
+  runtime: string;
+  memory: string;
+  startedAt: number;
+};
+
+export type OperationsWorkerPool = {
+  name: string;
+  utilization: number;
+  active: string;
+};
+
+export type OperationsSnapshot = {
+  synced_at: string;
+  metrics: OperationsMetric[];
+  queue: OperationsQueueItem[];
+  worker_pools: OperationsWorkerPool[];
+  notes: string[];
+  quick_actions: string[];
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 async function parseJson<T>(response: Response): Promise<T> {
@@ -104,6 +138,11 @@ export async function fetchProfile(handle: string) {
     cache: "no-store"
   });
   return parseJson<UserAdminRecord>(response);
+}
+
+export async function fetchOperations() {
+  const response = await fetch(`${API_BASE_URL}/operations`, { cache: "no-store" });
+  return parseJson<OperationsSnapshot>(response);
 }
 
 export async function fetchCurrentUser(token: string) {

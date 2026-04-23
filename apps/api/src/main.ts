@@ -34,6 +34,31 @@ type RunSubmissionBody = {
   timeLimitMs?: number;
   memoryLimitMb?: number;
 };
+type SandboxRunResult = {
+  submission_id: string | null;
+  verdict: string;
+  language: string;
+  exit_code: number | null;
+  compile_stdout: string;
+  compile_stderr: string;
+  stdout: string;
+  stderr: string;
+  duration_ms: number;
+  time_limit_ms: number;
+  memory_limit_mb: number;
+  output_truncated: boolean;
+  work_dir: string;
+};
+type SubmissionQueueItem = {
+  id: string;
+  problem: string;
+  language: string;
+  status: string;
+  tests: string;
+  runtime: string;
+  memory: string;
+  startedAt: number;
+};
 type CompleteProblemBody = {
   problemId?: string;
   problemSlug?: string;
@@ -218,6 +243,9 @@ const platformClient = new PlatformService(
   grpc.credentials.createInsecure()
 ) as unknown as ProtoClient;
 
+const activeSubmissions = new Map<string, SubmissionQueueItem>();
+const submissionHistory: SubmissionQueueItem[] = [];
+
 const allowedOrigins = new Set(
   (process.env.ALLOWED_ORIGINS ?? "http://localhost:3000,http://127.0.0.1:3000")
     .split(",")
@@ -314,8 +342,65 @@ function routeUserAction(pathname: string) {
   };
 }
 
-function runExecutor(payload: RunSubmissionBody) {
-  return new Promise<unknown>((resolve, reject) => {
+function workerPoolForLanguage(language: string) {
+  if (["Python 3.12", "JavaScript", "TypeScript"].includes(language)) {
+    return "KPL1";
+  }
+
+  if (["C", "C++17", "C++20", "Rust", "Go"].includes(language)) {
+    return "KPL2";
+  }
+
+  return "KPL3";
+}
+
+function statusFromVerdict(verdict: string) {
+  if (verdict === "accepted") {
+    return "Accepted";
+  }
+
+  if (verdict === "tool-unavailable") {
+    return "Tool unavailable";
+  }
+
+  if (verdict === "wrong-answer") {
+    return "Wrong answer";
+  }
+
+  if (verdict === "compile-error") {
+    return "Compile error";
+  }
+
+  if (verdict === "time-limit-exceeded") {
+    return "Time limit";
+  }
+
+  return verdict
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function queueItemFromResult(
+  id: string,
+  payload: RunSubmissionBody,
+  result: SandboxRunResult
+): SubmissionQueueItem {
+  return {
+    id,
+    problem: payload.problemId ?? "manual-run",
+    language: result.language || payload.language || "unknown",
+    status: statusFromVerdict(result.verdict),
+    tests: result.verdict === "accepted" ? "1 / 1" : "0 / 1",
+    runtime: `${result.duration_ms}ms`,
+    memory: `${result.memory_limit_mb} MB limit`,
+    startedAt: Date.now()
+  };
+}
+
+function runExecutor(payload: RunSubmissionBody, submissionId: string) {
+  return new Promise<SandboxRunResult>((resolve, reject) => {
     if (!existsSync(executorPath)) {
       reject(new Error("executor binary not found; run npm run build --workspace @judge/executor-rs"));
       return;
@@ -344,7 +429,7 @@ function runExecutor(payload: RunSubmissionBody) {
     });
     child.stdin.end(
       JSON.stringify({
-        submission_id: payload.problemId ?? randomUUID(),
+        submission_id: submissionId,
         language: payload.language ?? "",
         source: payload.source ?? "",
         stdin: payload.stdin ?? "",
@@ -355,6 +440,94 @@ function runExecutor(payload: RunSubmissionBody) {
       })
     );
   });
+}
+
+function poolCapacity(pool: "KPL1" | "KPL2" | "KPL3") {
+  const envValue = Number(process.env[`${pool}_WORKERS`] ?? 1);
+  return Number.isFinite(envValue) && envValue > 0 ? Math.floor(envValue) : 1;
+}
+
+function median(values: number[]) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? Math.round(((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2)
+    : sorted[middle] ?? 0;
+}
+
+function buildOperationsSnapshot() {
+  const now = Date.now();
+  const last24h = submissionHistory.filter((item) => now - item.startedAt <= 86_400_000);
+  const accepted = last24h.filter((item) => item.status === "Accepted");
+  const acceptedDurations = accepted
+    .map((item) => Number(item.runtime.replace("ms", "")))
+    .filter((value) => Number.isFinite(value));
+  const medianAccepted = median(acceptedDurations);
+  const reliability = last24h.length > 0 ? Math.round((accepted.length / last24h.length) * 1000) / 10 : 0;
+  const pools = (["KPL1", "KPL2", "KPL3"] as const).map((pool) => {
+    const total = poolCapacity(pool);
+    const active = [...activeSubmissions.values()].filter(
+      (item) => workerPoolForLanguage(item.language) === pool
+    ).length;
+
+    return {
+      name:
+        pool === "KPL1"
+          ? "KPL1 interpreted pool"
+          : pool === "KPL2"
+            ? "KPL2 native pool"
+            : "KPL3 managed runtime pool",
+      utilization: Math.min(100, Math.round((active / total) * 100)),
+      active: `${active} / ${total} active`
+    };
+  });
+  const totalWorkers = pools.reduce((sum, pool) => {
+    const total = Number(pool.active.split("/")[1]?.replace("active", "").trim() ?? 0);
+    return sum + total;
+  }, 0);
+  const availableWorkers = Math.max(0, totalWorkers - activeSubmissions.size);
+  const queue = [...activeSubmissions.values(), ...submissionHistory]
+    .sort((left, right) => right.startedAt - left.startedAt)
+    .slice(0, 8);
+
+  return {
+    synced_at: new Date(now).toISOString(),
+    metrics: [
+      {
+        id: "accepted-latency",
+        label: "median runtime on accepted submissions",
+        value: medianAccepted === null ? "n/a" : `${medianAccepted}ms`,
+        delta: `${accepted.length} accepted in API memory`,
+        progress: medianAccepted === null ? 0 : Math.max(5, Math.min(100, 100 - Math.round(medianAccepted / 40)))
+      },
+      {
+        id: "sandbox-capacity",
+        label: "workers available across sandbox pool",
+        value: String(availableWorkers),
+        delta: `${activeSubmissions.size} running / ${totalWorkers} configured`,
+        progress: totalWorkers === 0 ? 0 : Math.round((availableWorkers / totalWorkers) * 100)
+      },
+      {
+        id: "execution-reliability",
+        label: "successful executions in the last 24 hours",
+        value: `${reliability}%`,
+        delta: `${accepted.length} accepted / ${last24h.length} total`,
+        progress: reliability
+      }
+    ],
+    queue,
+    worker_pools: pools,
+    notes: [
+      `Executor binary ${existsSync(executorPath) ? "available" : "missing"}`,
+      `${submissionHistory.length} submissions recorded since API start`,
+      `${activeSubmissions.size} submissions currently executing`
+    ],
+    quick_actions: ["Open submission trace", "Inspect failed testcase", "Drain noisy worker"]
+  };
 }
 
 const server = createServer(async (request, response) => {
@@ -449,10 +622,33 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "GET" && pathname === "/operations") {
+      writeJson(request, response, 200, buildOperationsSnapshot());
+      return;
+    }
+
     if (request.method === "POST" && pathname === "/submissions/run") {
       const body = await readJson<RunSubmissionBody>(request);
-      const result = await runExecutor(body);
-      writeJson(request, response, 200, result);
+      const submissionId = `SB-${randomUUID().slice(0, 8).toUpperCase()}`;
+      const runningItem: SubmissionQueueItem = {
+        id: submissionId,
+        problem: body.problemId ?? "manual-run",
+        language: body.language ?? "unknown",
+        status: "Running",
+        tests: "0 / 1",
+        runtime: "--",
+        memory: "--",
+        startedAt: Date.now()
+      };
+      activeSubmissions.set(submissionId, runningItem);
+      try {
+        const result = await runExecutor(body, submissionId);
+        submissionHistory.unshift(queueItemFromResult(submissionId, body, result));
+        submissionHistory.splice(64);
+        writeJson(request, response, 200, result);
+      } finally {
+        activeSubmissions.delete(submissionId);
+      }
       return;
     }
 

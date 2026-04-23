@@ -335,8 +335,16 @@ impl AppStore {
             ),
         ];
 
-        for (title, category, difficulty, status, solved_count, time_limit, statement, languages) in
-            seeds
+        for (
+            title,
+            category,
+            difficulty,
+            status,
+            _solved_count,
+            time_limit,
+            statement,
+            languages,
+        ) in seeds
         {
             connection.execute(
                 "
@@ -353,7 +361,7 @@ impl AppStore {
                     category,
                     difficulty,
                     status,
-                    solved_count,
+                    0,
                     time_limit,
                     statement,
                     serialize_languages(languages),
@@ -708,13 +716,6 @@ impl AppStore {
             )
             .map_err(|_| Status::internal("failed to update solved state"))?;
 
-        connection
-            .execute(
-                "UPDATE problems SET solved_count = solved_count + 1 WHERE problem_id = ?1",
-                params![resolved_problem_id],
-            )
-            .map_err(|_| Status::internal("failed to update problem solved count"))?;
-
         self.get_user_by_id(user_id)?
             .ok_or_else(|| Status::not_found("user not found"))
     }
@@ -743,7 +744,7 @@ impl AppStore {
             .prepare(
                 "
                 SELECT p.problem_id, p.slug, p.title, p.category, p.difficulty, p.status,
-                       p.solved_count, p.time_limit, p.statement, p.languages_csv,
+                       COUNT(ups_all.user_id), p.time_limit, p.statement, p.languages_csv,
                        p.created_at_unix,
                        EXISTS(
                            SELECT 1
@@ -752,6 +753,8 @@ impl AppStore {
                              AND ups.user_id = ?1
                        )
                 FROM problems p
+                LEFT JOIN user_problem_solves ups_all ON ups_all.problem_id = p.problem_id
+                GROUP BY p.problem_id
                 ORDER BY created_at_unix DESC, title ASC
                 ",
             )

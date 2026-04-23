@@ -19,7 +19,7 @@ const seededProblems: ProblemRecord[] = fallbackProblems.map((problem) => ({
   category: problem.category,
   difficulty: problem.difficulty,
   status: problem.status,
-  solved_count: problem.solvedCount,
+  solved_count: 0,
   time_limit: problem.timeLimit,
   statement: problem.title,
   created_at: new Date().toISOString(),

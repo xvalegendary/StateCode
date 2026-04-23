@@ -27,7 +27,7 @@ export const fallbackProblemRecords: ProblemRecord[] = fallbackProblems.map((pro
   category: problem.category,
   difficulty: problem.difficulty,
   status: problem.status,
-  solved_count: problem.solvedCount,
+  solved_count: 0,
   time_limit: problem.timeLimit,
   statement: `Solve ${problem.title}. Read input from stdin and print the answer to stdout.`,
   created_at: new Date().toISOString(),

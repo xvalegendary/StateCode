@@ -20,6 +20,9 @@ export function SolveScreen() {
   const [categories, setCategories] = useState<string[]>(fallbackProblemCategories);
   const [problems, setProblems] = useState<ProblemRecord[]>(fallbackProblemRecords);
   const [languages, setLanguages] = useState<string[]>(fallbackLanguages);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedDifficulties, setSelectedDifficulties] = useState<number[]>([]);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
 
   useEffect(() => {
     const session = readAuthSession();
@@ -31,6 +34,49 @@ export function SolveScreen() {
       })
       .catch(() => undefined);
   }, []);
+
+  const toggleStringFilter = (
+    value: string,
+    selected: string[],
+    setSelected: (nextSelected: string[]) => void
+  ) => {
+    setSelected(
+      selected.includes(value)
+        ? selected.filter((selectedValue) => selectedValue !== value)
+        : [...selected, value]
+    );
+  };
+
+  const toggleDifficultyFilter = (value: number) => {
+    setSelectedDifficulties(
+      selectedDifficulties.includes(value)
+        ? selectedDifficulties.filter((selectedValue) => selectedValue !== value)
+        : [...selectedDifficulties, value]
+    );
+  };
+
+  const filteredProblems = problems.filter((problem) => {
+    const matchesCategory =
+      selectedCategories.length === 0 || selectedCategories.includes(problem.category);
+    const matchesDifficulty =
+      selectedDifficulties.length === 0 || selectedDifficulties.includes(problem.difficulty);
+    const matchesLanguage =
+      selectedLanguages.length === 0 ||
+      problem.languages.some((language) => selectedLanguages.includes(language));
+
+    return matchesCategory && matchesDifficulty && matchesLanguage;
+  });
+
+  const hasActiveFilters =
+    selectedCategories.length > 0 ||
+    selectedDifficulties.length > 0 ||
+    selectedLanguages.length > 0;
+
+  const clearFilters = () => {
+    setSelectedCategories([]);
+    setSelectedDifficulties([]);
+    setSelectedLanguages([]);
+  };
 
   return (
     <main className="min-h-screen px-6 py-28 md:px-8 lg:px-10">
@@ -52,16 +98,35 @@ export function SolveScreen() {
           <aside className="space-y-6">
             <Card className="border bg-card">
               <CardHeader>
-                <CardTitle className="text-base">Filters</CardTitle>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-base">Filters</CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-none"
+                    onClick={clearFilters}
+                    disabled={!hasActiveFilters}
+                  >
+                    Clear
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <div className="mb-2 text-sm font-medium">Categories</div>
                   <div className="flex flex-wrap gap-2">
                     {categories.map((category) => (
-                      <Badge key={category} variant="outline">
+                      <Button
+                        key={category}
+                        variant={selectedCategories.includes(category) ? "default" : "outline"}
+                        size="sm"
+                        className="rounded-none"
+                        onClick={() =>
+                          toggleStringFilter(category, selectedCategories, setSelectedCategories)
+                        }
+                      >
                         {category}
-                      </Badge>
+                      </Button>
                     ))}
                   </div>
                 </div>
@@ -69,7 +134,12 @@ export function SolveScreen() {
                   <div className="mb-2 text-sm font-medium">Difficulty 1-10</div>
                   <div className="grid grid-cols-5 gap-2">
                     {difficultyLevels.map((level) => (
-                      <Button key={level} variant="outline" className="justify-center rounded-none">
+                      <Button
+                        key={level}
+                        variant={selectedDifficulties.includes(level) ? "default" : "outline"}
+                        className="justify-center rounded-none"
+                        onClick={() => toggleDifficultyFilter(level)}
+                      >
                         {level}
                       </Button>
                     ))}
@@ -79,9 +149,17 @@ export function SolveScreen() {
                   <div className="mb-2 text-sm font-medium">Languages</div>
                   <div className="flex flex-wrap gap-2">
                     {languages.map((language) => (
-                      <Badge key={language} variant="outline">
+                      <Button
+                        key={language}
+                        variant={selectedLanguages.includes(language) ? "default" : "outline"}
+                        size="sm"
+                        className="rounded-none"
+                        onClick={() =>
+                          toggleStringFilter(language, selectedLanguages, setSelectedLanguages)
+                        }
+                      >
                         {language}
-                      </Badge>
+                      </Button>
                     ))}
                   </div>
                 </div>
@@ -108,10 +186,20 @@ export function SolveScreen() {
 
           <Card className="border bg-card">
             <CardHeader>
-              <CardTitle className="text-base">Suggested tasks to solve</CardTitle>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle className="text-base">Suggested tasks to solve</CardTitle>
+                <Badge variant="outline">
+                  {filteredProblems.length} / {problems.length} tasks
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {problems.map((problem) => (
+              {filteredProblems.length === 0 ? (
+                <div className="border p-6 text-sm text-muted-foreground">
+                  No tasks match these filters. Clear filters or select another language.
+                </div>
+              ) : null}
+              {filteredProblems.map((problem) => (
                 <div
                   key={problem.problem_id}
                   className="flex flex-col gap-4 border p-4 transition-colors hover:bg-muted md:flex-row md:items-center md:justify-between"

@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { ArrowRight, Binary, Clock3, Cpu, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,12 +24,40 @@ import {
   TableRow
 } from "@/components/ui/table";
 import {
-  executionMetrics,
-  executionNotes,
-  executionQueue,
-  quickActions,
-  workerPools
-} from "../data/operations";
+  fetchOperations,
+  OperationsSnapshot
+} from "@/features/platform/lib/platform-api";
+
+const emptyOperations: OperationsSnapshot = {
+  synced_at: "",
+  metrics: [
+    {
+      id: "accepted-latency",
+      label: "median runtime on accepted submissions",
+      value: "n/a",
+      delta: "0 accepted in API memory",
+      progress: 0
+    },
+    {
+      id: "sandbox-capacity",
+      label: "workers available across sandbox pool",
+      value: "0",
+      delta: "0 running / 0 configured",
+      progress: 0
+    },
+    {
+      id: "execution-reliability",
+      label: "successful executions in the last 24 hours",
+      value: "0%",
+      delta: "0 accepted / 0 total",
+      progress: 0
+    }
+  ],
+  queue: [],
+  worker_pools: [],
+  notes: ["API operations endpoint is not connected"],
+  quick_actions: []
+};
 
 function getStatusVariant(status: string): "secondary" | "default" | "outline" {
   if (status === "Accepted") {
@@ -41,6 +72,22 @@ function getStatusVariant(status: string): "secondary" | "default" | "outline" {
 }
 
 export function ControlRoomScreen() {
+  const [operations, setOperations] = useState<OperationsSnapshot>(emptyOperations);
+
+  useEffect(() => {
+    fetchOperations()
+      .then(setOperations)
+      .catch(() => setOperations(emptyOperations));
+  }, []);
+
+  const syncLabel = operations.synced_at
+    ? new Intl.DateTimeFormat(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      }).format(new Date(operations.synced_at))
+    : "not synced";
+
   return (
     <main className="min-h-screen px-6 py-10 md:px-8 lg:px-10">
       <section className="mx-auto flex w-full max-w-[1320px] flex-col gap-8">
@@ -75,11 +122,11 @@ export function ControlRoomScreen() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-3">
-          {executionMetrics.map((metric, index) => (
+          {operations.metrics.map((metric, index) => (
             <Card key={metric.id} className="border bg-card">
               <CardHeader>
                 <div className="flex items-center justify-between gap-3">
-                  <Badge variant="outline">KPI {index + 1}</Badge>
+                  <Badge variant="outline">KPL {index + 1}</Badge>
                   {index === 0 ? (
                     <Clock3 className="size-4 text-muted-foreground" />
                   ) : index === 1 ? (
@@ -108,10 +155,10 @@ export function ControlRoomScreen() {
                 <div>
                   <CardTitle className="text-base">Active submission queue</CardTitle>
                   <CardDescription>
-                    Latest submissions across languages with current testcase progress.
+                    Latest submissions recorded by the API gateway in this process.
                   </CardDescription>
                 </div>
-                <Badge variant="outline">last sync 12s ago</Badge>
+                <Badge variant="outline">sync {syncLabel}</Badge>
               </div>
             </CardHeader>
             <CardContent>
@@ -128,7 +175,18 @@ export function ControlRoomScreen() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {executionQueue.map((item) => (
+                  {operations.queue.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className="py-8 text-center text-sm text-muted-foreground"
+                      >
+                        No submissions recorded yet. Run code from a workspace to populate this
+                        queue.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  {operations.queue.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                         {item.id}
@@ -147,8 +205,8 @@ export function ControlRoomScreen() {
               </Table>
             </CardContent>
             <CardFooter className="justify-between text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              <span>queue pressure within target</span>
-              <span>3 jobs currently executing</span>
+              <span>{operations.queue.length} submissions visible</span>
+              <span>{operations.notes.at(-1) ?? "0 submissions currently executing"}</span>
             </CardFooter>
           </Card>
 
@@ -166,7 +224,12 @@ export function ControlRoomScreen() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
-                {workerPools.map((pool, index) => (
+                {operations.worker_pools.length === 0 ? (
+                  <div className="border p-4 text-sm text-muted-foreground">
+                    Worker pool data is unavailable until the API is running.
+                  </div>
+                ) : null}
+                {operations.worker_pools.map((pool, index) => (
                   <div key={pool.name} className="space-y-2">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -178,7 +241,7 @@ export function ControlRoomScreen() {
                       <Badge variant="outline">{pool.utilization}%</Badge>
                     </div>
                     <Progress value={pool.utilization} className="h-1.5" />
-                    {index < workerPools.length - 1 ? <Separator /> : null}
+                    {index < operations.worker_pools.length - 1 ? <Separator /> : null}
                   </div>
                 ))}
               </CardContent>
@@ -190,12 +253,12 @@ export function ControlRoomScreen() {
                 <CardDescription>Short signals that matter during active review.</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
-                {executionNotes.map((note) => (
+                {operations.notes.map((note) => (
                   <Badge key={note} variant="outline">{note}</Badge>
                 ))}
               </CardContent>
               <CardFooter className="flex flex-wrap gap-2">
-                {quickActions.map((action) => (
+                {operations.quick_actions.map((action) => (
                   <Button key={action} variant="ghost">
                     {action}
                   </Button>
