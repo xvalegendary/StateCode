@@ -3,6 +3,7 @@ import type { RankTier, UserRole, VisibilityMode } from "@/features/auth/lib/ses
 export type LeaderboardEntry = {
   rank: number;
   username: string;
+  region_code: string;
   title: string;
   rating: number;
   solved_problems: number;
@@ -31,6 +32,7 @@ export type UserAdminRecord = {
   username: string;
   role: UserRole;
   title: string;
+  region_code: string;
   visibility: VisibilityMode;
   tournaments_played: number;
   solved_problems: number;
@@ -164,6 +166,19 @@ export async function updateProfileVisibility(
       "Content-Type": "application/json"
     },
     body: JSON.stringify({ visibility })
+  });
+
+  return parseJson<UserAdminRecord>(response);
+}
+
+export async function updateProfileRegion(token: string, regionCode: string) {
+  const response = await fetch(`${API_BASE_URL}/auth/region`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ regionCode })
   });
 
   return parseJson<UserAdminRecord>(response);

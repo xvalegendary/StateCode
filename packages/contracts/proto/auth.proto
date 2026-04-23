@@ -8,6 +8,7 @@ service PlatformService {
   rpc RequestPasswordReset(PasswordResetRequest) returns (PasswordResetResponse);
   rpc GetCurrentUser(SessionRequest) returns (UserRecord);
   rpc UpdateProfileVisibility(UpdateProfileVisibilityRequest) returns (UserRecord);
+  rpc UpdateProfileRegion(UpdateProfileRegionRequest) returns (UserRecord);
   rpc GetPublicProfile(ProfileHandleRequest) returns (UserRecord);
   rpc GetLeaderboard(Empty) returns (LeaderboardResponse);
   rpc ListProblems(ProblemCatalogRequest) returns (ProblemCatalogResponse);
@@ -60,6 +61,11 @@ message UpdateProfileVisibilityRequest {
   string visibility = 2;
 }
 
+message UpdateProfileRegionRequest {
+  string token = 1;
+  string region_code = 2;
+}
+
 message CompleteProblemRequest {
   string token = 1;
   string problem_id = 2;
@@ -93,6 +99,7 @@ message AuthResponse {
   bool leaderboard_hidden = 19;
   bool is_banned = 20;
   string profile_url = 21;
+  string region_code = 22;
 }
 
 message UserRecord {
@@ -115,6 +122,7 @@ message UserRecord {
   bool leaderboard_hidden = 17;
   bool is_banned = 18;
   string profile_url = 19;
+  string region_code = 20;
 }
 
 message LeaderboardEntry {
@@ -124,6 +132,7 @@ message LeaderboardEntry {
   int32 rating = 4;
   int32 solved_problems = 5;
   int32 tournaments_played = 6;
+  string region_code = 7;
 }
 
 message LeaderboardResponse {

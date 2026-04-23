@@ -15,6 +15,7 @@ import {
 } from "@/features/auth/lib/session";
 import {
   fetchCurrentUser,
+  updateProfileRegion,
   updateProfileVisibility
 } from "@/features/platform/lib/platform-api";
 import { Button } from "@/components/ui/button";
@@ -94,6 +95,18 @@ export function Navbar() {
     }
   };
 
+  const handleRegionChange = async (regionCode: string) => {
+    if (!session?.token || regionCode === session.profile.regionCode) {
+      return;
+    }
+
+    const record = await updateProfileRegion(session.token, regionCode);
+    const next = syncStoredSession(record);
+    if (next) {
+      setSession(next);
+    }
+  };
+
   const handleLogout = () => {
     clearAuthSession();
     setSession(null);
@@ -134,7 +147,7 @@ export function Navbar() {
                   className={cn(
                     "inline-flex min-h-9 items-center border px-3 text-sm transition-colors",
                     isActive
-                      ? "border-foreground bg-foreground text-background"
+                      ? "border-border bg-muted text-foreground"
                       : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
                   )}
                 >
@@ -155,7 +168,7 @@ export function Navbar() {
                   className={cn(
                     "flex min-h-10 items-center gap-3 border px-3 text-left transition-all duration-300",
                     profileOpen
-                      ? "border-foreground bg-foreground text-background"
+                      ? "border-border bg-muted text-foreground"
                       : "border-border bg-background text-foreground"
                   )}
                 >
@@ -167,7 +180,7 @@ export function Navbar() {
                     <div
                       className={cn(
                         "truncate text-[11px]",
-                        profileOpen ? "text-background/70" : "text-muted-foreground"
+                        "text-muted-foreground"
                       )}
                     >
                       {session.profile.rank}
@@ -179,6 +192,7 @@ export function Navbar() {
                   <UserProfilePanel
                     session={session}
                     onToggleVisibility={handleToggleVisibility}
+                    onRegionChange={handleRegionChange}
                     onLogout={handleLogout}
                   />
                 ) : null}

@@ -27,6 +27,7 @@ export type AuthSession = {
     profileUrl: string;
     tournamentsPlayed: number;
     solvedProblems: number;
+    regionCode: string;
     visibility: VisibilityMode;
     leaderboardRating: number;
     leaderboardPosition: number;
@@ -62,6 +63,7 @@ export type AuthPayload = {
   leaderboard_hidden: boolean;
   is_banned: boolean;
   profile_url: string;
+  region_code: string;
 };
 
 export type SessionUserRecord = Omit<AuthPayload, "token" | "message">;
@@ -83,6 +85,7 @@ function normalizePayload(payload: AuthPayload): AuthSession {
       profileUrl: payload.profile_url,
       tournamentsPlayed: payload.tournaments_played,
       solvedProblems: payload.solved_problems,
+      regionCode: payload.region_code || "UN",
       visibility: payload.visibility,
       leaderboardRating: payload.leaderboard_rating,
       leaderboardPosition: payload.leaderboard_position,
@@ -111,6 +114,7 @@ function normalizeUserRecord(record: SessionUserRecord, current: AuthSession): A
       profileUrl: record.profile_url,
       tournamentsPlayed: record.tournaments_played,
       solvedProblems: record.solved_problems,
+      regionCode: record.region_code || "UN",
       visibility: record.visibility,
       leaderboardRating: record.leaderboard_rating,
       leaderboardPosition: record.leaderboard_position,
@@ -147,7 +151,15 @@ export function readAuthSession(): AuthSession | null {
 
   try {
     const parsed = JSON.parse(raw) as AuthSession | AuthPayload;
-    return isNormalizedSession(parsed) ? parsed : normalizePayload(parsed);
+    return isNormalizedSession(parsed)
+      ? {
+          ...parsed,
+          profile: {
+            ...parsed.profile,
+            regionCode: parsed.profile.regionCode || "UN"
+          }
+        }
+      : normalizePayload(parsed);
   } catch {
     return null;
   }

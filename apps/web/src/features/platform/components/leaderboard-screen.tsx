@@ -13,6 +13,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { leaderboardEntries as fallbackEntries } from "@/features/platform/data/catalog";
+import { regionFlag, regionName } from "@/features/platform/data/regions";
 import {
   fetchLeaderboard,
   LeaderboardEntry
@@ -21,6 +22,7 @@ import {
 const seededFallback: LeaderboardEntry[] = fallbackEntries.map((entry) => ({
   rank: entry.rank,
   username: `@${entry.handle}`,
+  region_code: "UN",
   title: "",
   rating: entry.rating,
   solved_problems: entry.solved,
@@ -66,7 +68,9 @@ export function LeaderboardScreen() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-1">
-                <div className="text-lg font-semibold">{leader.username}</div>
+                <div className="text-lg font-semibold">
+                  {regionFlag(leader.region_code)} {leader.username}
+                </div>
                 <div className="text-xs text-muted-foreground">{leader.rating} rating</div>
               </CardContent>
             </Card>
@@ -107,6 +111,7 @@ export function LeaderboardScreen() {
                 <TableRow>
                   <TableHead>Rank</TableHead>
                   <TableHead>Username</TableHead>
+                  <TableHead>Region</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Solved</TableHead>
                   <TableHead>Tournaments</TableHead>
@@ -118,6 +123,10 @@ export function LeaderboardScreen() {
                   <TableRow key={`${entry.rank}-${entry.username}`}>
                     <TableCell className="font-medium">{entry.rank}</TableCell>
                     <TableCell>{entry.username}</TableCell>
+                    <TableCell title={regionName(entry.region_code)}>
+                      <span className="mr-2 text-base">{regionFlag(entry.region_code)}</span>
+                      {entry.region_code}
+                    </TableCell>
                     <TableCell>{entry.title || "Ranked"}</TableCell>
                     <TableCell>{entry.solved_problems}</TableCell>
                     <TableCell>{entry.tournaments_played}</TableCell>

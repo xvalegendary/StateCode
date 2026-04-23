@@ -11,6 +11,7 @@ import {
   rankSystemSummary,
   ratingSystemSummary
 } from "@/features/auth/lib/session";
+import { regionFlag, regionName, regionOptions } from "@/features/platform/data/regions";
 import { cn } from "@/lib/utils";
 
 function parseDate(value: string | null | undefined) {
@@ -52,10 +53,12 @@ function formatRelative(value: string | null | undefined) {
 export function UserProfilePanel({
   session,
   onToggleVisibility,
+  onRegionChange,
   onLogout
 }: {
   session: AuthSession;
   onToggleVisibility: () => void;
+  onRegionChange: (regionCode: string) => void;
   onLogout: () => void;
 }) {
   const { profile } = session;
@@ -71,6 +74,7 @@ export function UserProfilePanel({
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold">{session.username}</span>
+              <span title={regionName(profile.regionCode)}>{regionFlag(profile.regionCode)}</span>
               <Badge variant="outline" className={cn("border-none px-0 text-xs", getRankPalette(profile.rank))}>
                 {profile.rank}
               </Badge>
@@ -122,6 +126,21 @@ export function UserProfilePanel({
             {profile.visibility === "public" ? "Set private" : "Set public"}
           </Button>
         </div>
+
+        <label className="block space-y-2">
+          <span className="font-medium">Region</span>
+          <select
+            value={profile.regionCode}
+            onChange={(event) => onRegionChange(event.target.value)}
+            className="h-10 w-full rounded-none border bg-background px-3 text-sm outline-none"
+          >
+            {regionOptions.map((region) => (
+              <option key={region.code} value={region.code}>
+                {regionFlag(region.code)} {region.name}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
           <div>

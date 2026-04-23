@@ -11,7 +11,7 @@ use crate::proto::{
     AuthResponse, CompleteProblemRequest, Empty, LeaderboardEntry, LeaderboardResponse,
     LoginRequest, PasswordResetRequest, PasswordResetResponse, ProblemCatalogRequest,
     ProblemCatalogResponse, ProblemRecord, ProfileHandleRequest, RegisterRequest, SessionRequest,
-    UpdateProfileVisibilityRequest, UserListResponse, UserRecord,
+    UpdateProfileRegionRequest, UpdateProfileVisibilityRequest, UserListResponse, UserRecord,
 };
 use crate::rating::resolve_rank;
 use crate::security::{hash_password, verify_password};
@@ -73,6 +73,22 @@ impl PlatformGrpcService {
         }
 
         Ok(())
+    }
+
+    fn normalize_region_code(region_code: &str) -> Result<String, Status> {
+        let normalized = region_code.trim().to_uppercase();
+        let is_country = normalized.len() == 2
+            && normalized
+                .chars()
+                .all(|character| character.is_ascii_uppercase());
+
+        if normalized == "UN" || is_country {
+            return Ok(normalized);
+        }
+
+        Err(Status::invalid_argument(
+            "region code must be UN or an ISO 3166-1 alpha-2 code",
+        ))
     }
 
     fn validate_register(request: &RegisterRequest) -> Result<(), Status> {
@@ -173,6 +189,7 @@ impl PlatformGrpcService {
             leaderboard_hidden: user.leaderboard_hidden,
             is_banned: user.is_banned,
             profile_url: profile_url(&user.username),
+            region_code: user.region_code.clone(),
         })
     }
 
@@ -200,6 +217,7 @@ impl PlatformGrpcService {
             leaderboard_hidden: user.leaderboard_hidden,
             is_banned: user.is_banned,
             profile_url: profile_url(&user.username),
+            region_code: user.region_code.clone(),
         })
     }
 
@@ -308,6 +326,18 @@ impl PlatformService for PlatformGrpcService {
         Ok(Response::new(self.to_user_record(&user)?))
     }
 
+    async fn update_profile_region(
+        &self,
+        request: Request<UpdateProfileRegionRequest>,
+    ) -> Result<Response<UserRecord>, Status> {
+        let payload = request.into_inner();
+        let actor = self.require_authenticated(payload.token.trim())?;
+        let region_code = Self::normalize_region_code(&payload.region_code)?;
+        let user = self.store.set_user_region(&actor.id, &region_code)?;
+
+        Ok(Response::new(self.to_user_record(&user)?))
+    }
+
     async fn get_public_profile(
         &self,
         request: Request<ProfileHandleRequest>,
@@ -342,6 +372,7 @@ impl PlatformService for PlatformGrpcService {
                 rating: entry.rating,
                 solved_problems: entry.solved_problems,
                 tournaments_played: entry.tournaments_played,
+                region_code: entry.region_code,
             })
             .collect();
 

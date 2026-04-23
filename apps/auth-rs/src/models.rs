@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 
 pub const CALIBRATION_TARGET: i32 = 5;
+pub const DEFAULT_REGION_CODE: &str = "UN";
 
 #[derive(Debug, Clone)]
 pub struct StoredUser {
@@ -8,6 +9,7 @@ pub struct StoredUser {
     pub login: String,
     pub email: String,
     pub username: String,
+    pub region_code: String,
     pub password_hash: String,
     pub role: String,
     pub title: Option<String>,
@@ -42,6 +44,7 @@ pub struct StoredProblem {
 pub struct LeaderboardUser {
     pub username: String,
     pub title: String,
+    pub region_code: String,
     pub rating: i32,
     pub solved_problems: i32,
     pub tournaments_played: i32,

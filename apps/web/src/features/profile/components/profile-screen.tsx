@@ -20,10 +20,12 @@ import {
   fetchProfile,
   UserAdminRecord
 } from "@/features/platform/lib/platform-api";
+import { regionFlag, regionName } from "@/features/platform/data/regions";
 import { cn } from "@/lib/utils";
 
 type ProfileView = {
   username: string;
+  regionCode: string;
   profileUrl: string;
   rank: RankTier;
   visibility: "public" | "private";
@@ -50,6 +52,7 @@ function toProfileView(source: UserAdminRecord | AuthSession): ProfileView {
   if ("profile" in source) {
     return {
       username: source.username,
+      regionCode: source.profile.regionCode,
       profileUrl: source.profile.profileUrl,
       rank: source.profile.rank,
       visibility: source.profile.visibility,
@@ -67,6 +70,7 @@ function toProfileView(source: UserAdminRecord | AuthSession): ProfileView {
 
   return {
     username: source.username,
+    regionCode: source.region_code || "UN",
     profileUrl: source.profile_url,
     rank: source.rank,
     visibility: source.visibility,
@@ -193,6 +197,10 @@ export function ProfileScreen({ handle }: { handle: string }) {
                   <div className="text-sm text-muted-foreground">{profile.profileUrl}</div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="rounded-none" title={regionName(profile.regionCode)}>
+                    <span className="text-base">{regionFlag(profile.regionCode)}</span>
+                    {profile.regionCode}
+                  </Badge>
                   <Badge variant="outline" className={cn("rounded-none", getRankPalette(profile.rank))}>
                     {profile.rank}
                   </Badge>
@@ -251,6 +259,12 @@ export function ProfileScreen({ handle }: { handle: string }) {
               <div>
                 <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Last online</div>
                 <div className="mt-1 font-medium">{formatDate(profile.lastOnlineAt)}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Region</div>
+                <div className="mt-1 font-medium">
+                  {regionFlag(profile.regionCode)} {regionName(profile.regionCode)}
+                </div>
               </div>
               <div>
                 <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Calibration</div>

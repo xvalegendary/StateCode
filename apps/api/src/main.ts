@@ -12,6 +12,7 @@ type LoginBody = { login?: string; password?: string };
 type RegisterBody = { login?: string; password?: string; username?: string };
 type ResetBody = { login?: string };
 type VisibilityBody = { visibility?: string };
+type RegionBody = { regionCode?: string };
 type TitleBody = { title?: string };
 type RoleBody = { role?: string };
 type BanBody = { isBanned?: boolean };
@@ -87,6 +88,7 @@ type AuthResponse = {
   leaderboard_hidden: boolean;
   is_banned: boolean;
   profile_url: string;
+  region_code: string;
 };
 
 type UserRecord = Omit<AuthResponse, "token" | "message">;
@@ -115,6 +117,7 @@ type LeaderboardEntry = {
   rating: number;
   solved_problems: number;
   tournaments_played: number;
+  region_code: string;
 };
 
 type ProtoClient = grpc.Client & {
@@ -136,6 +139,10 @@ type ProtoClient = grpc.Client & {
   ): void;
   updateProfileVisibility(
     request: { token: string; visibility: string },
+    callback: (error: grpc.ServiceError | null, response: UserRecord) => void
+  ): void;
+  updateProfileRegion(
+    request: { token: string; region_code: string },
     callback: (error: grpc.ServiceError | null, response: UserRecord) => void
   ): void;
   getPublicProfile(
@@ -603,6 +610,16 @@ const server = createServer(async (request, response) => {
       const result = await grpcCall(platformClient.updateProfileVisibility.bind(platformClient), {
         token: bearerToken(request),
         visibility: body.visibility ?? ""
+      });
+      writeJson(request, response, 200, result);
+      return;
+    }
+
+    if (request.method === "POST" && pathname === "/auth/region") {
+      const body = await readJson<RegionBody>(request);
+      const result = await grpcCall(platformClient.updateProfileRegion.bind(platformClient), {
+        token: bearerToken(request),
+        region_code: body.regionCode ?? ""
       });
       writeJson(request, response, 200, result);
       return;

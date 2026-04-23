@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::models::{
     supported_languages, LeaderboardUser, StoredProblem, StoredUser, CALIBRATION_TARGET,
+    DEFAULT_REGION_CODE,
 };
 use crate::security::{generate_bootstrap_password, generate_session_token, hash_password};
 
@@ -48,6 +49,7 @@ impl AppStore {
                 login TEXT NOT NULL UNIQUE,
                 email TEXT NOT NULL UNIQUE,
                 username TEXT NOT NULL UNIQUE,
+                region_code TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL,
                 title TEXT,
@@ -148,17 +150,18 @@ impl AppStore {
         connection.execute(
             "
             INSERT INTO users (
-                id, login, email, username, password_hash, role, title, visibility,
+                id, login, email, username, region_code, password_hash, role, title, visibility,
                 tournaments_played, solved_problems, calibration_solved, leaderboard_rating,
                 leaderboard_hidden, is_banned, last_online_unix, created_at_unix
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, 'admin', ?6, 'private', 0, 0, 0, NULL, 1, 0, ?7, ?7)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'admin', ?7, 'private', 0, 0, 0, NULL, 1, 0, ?8, ?8)
             ",
             params![
                 Uuid::new_v4().to_string(),
                 "admin",
                 "admin@statecode.com",
                 "@statecode-admin",
+                "UN",
                 password_hash,
                 "Platform Administrator",
                 now
@@ -193,29 +196,30 @@ impl AppStore {
             .map_err(|error| std::io::Error::other(error.to_string()))?;
         let now = unix_now();
         let seeds = [
-            ("bytemarshal", "@bytemarshal", 2712, 1487, 22),
-            ("heapwizard", "@heapwizard", 2648, 1435, 18),
-            ("segfaultless", "@segfaultless", 2591, 1398, 19),
-            ("dp_nomad", "@dp_nomad", 2516, 1362, 17),
-            ("range_update", "@range_update", 2478, 1320, 15),
-            ("graphpilot", "@graphpilot", 2441, 1297, 21),
+            ("bytemarshal", "@bytemarshal", "US", 2712, 1487, 22),
+            ("heapwizard", "@heapwizard", "DE", 2648, 1435, 18),
+            ("segfaultless", "@segfaultless", "JP", 2591, 1398, 19),
+            ("dp_nomad", "@dp_nomad", "BR", 2516, 1362, 17),
+            ("range_update", "@range_update", "IN", 2478, 1320, 15),
+            ("graphpilot", "@graphpilot", "KR", 2441, 1297, 21),
         ];
 
-        for (login, username, rating, solved, tournaments) in seeds {
+        for (login, username, region_code, rating, solved, tournaments) in seeds {
             connection.execute(
                 "
                 INSERT INTO users (
-                    id, login, email, username, password_hash, role, title, visibility,
+                    id, login, email, username, region_code, password_hash, role, title, visibility,
                     tournaments_played, solved_problems, calibration_solved, leaderboard_rating,
                     leaderboard_hidden, is_banned, last_online_unix, created_at_unix
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, 'user', NULL, 'public', ?6, ?7, ?8, ?9, 0, 0, ?10, ?10)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'user', NULL, 'public', ?7, ?8, ?9, ?10, 0, 0, ?11, ?11)
                 ",
                 params![
                     Uuid::new_v4().to_string(),
                     login,
                     format!("{login}@statecode.dev"),
                     username,
+                    region_code,
                     demo_password_hash,
                     tournaments,
                     solved,
@@ -387,6 +391,7 @@ impl AppStore {
             login: login.to_string(),
             email: format!("{login}@users.statecode.local"),
             username: username.to_string(),
+            region_code: DEFAULT_REGION_CODE.to_string(),
             password_hash: password_hash.to_string(),
             role: "user".to_string(),
             title: None,
@@ -405,17 +410,18 @@ impl AppStore {
             .execute(
                 "
                 INSERT INTO users (
-                    id, login, email, username, password_hash, role, title, visibility,
+                    id, login, email, username, region_code, password_hash, role, title, visibility,
                     tournaments_played, solved_problems, calibration_solved, leaderboard_rating,
                     leaderboard_hidden, is_banned, last_online_unix, created_at_unix
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, ?7, ?8, ?9, ?10, NULL, 0, 0, ?11, ?12)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8, ?9, ?10, ?11, NULL, 0, 0, ?12, ?13)
                 ",
                 params![
                     user.id,
                     user.login,
                     user.email,
                     user.username,
+                    user.region_code,
                     user.password_hash,
                     user.role,
                     user.visibility,
@@ -517,6 +523,14 @@ impl AppStore {
         )
     }
 
+    pub fn set_user_region(&self, user_id: &str, region_code: &str) -> Result<StoredUser, Status> {
+        self.execute_user_update(
+            "UPDATE users SET region_code = ?2 WHERE id = ?1",
+            params![user_id, region_code],
+            user_id,
+        )
+    }
+
     pub fn list_users(&self) -> Result<Vec<StoredUser>, Status> {
         let connection = self.connection()?;
         let mut statement = connection
@@ -538,7 +552,7 @@ impl AppStore {
         let mut statement = connection
             .prepare(
                 "
-                SELECT username, COALESCE(title, ''), leaderboard_rating, solved_problems, tournaments_played
+                SELECT username, COALESCE(title, ''), region_code, leaderboard_rating, solved_problems, tournaments_played
                 FROM users
                 WHERE leaderboard_hidden = 0
                   AND is_banned = 0
@@ -552,9 +566,10 @@ impl AppStore {
                 Ok(LeaderboardUser {
                     username: row.get(0)?,
                     title: row.get(1)?,
-                    rating: row.get(2)?,
-                    solved_problems: row.get(3)?,
-                    tournaments_played: row.get(4)?,
+                    region_code: row.get(2)?,
+                    rating: row.get(3)?,
+                    solved_problems: row.get(4)?,
+                    tournaments_played: row.get(5)?,
                 })
             })
             .map_err(|_| Status::internal("failed to query leaderboard"))?;
@@ -878,6 +893,7 @@ fn map_user_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<StoredUser> {
         login: row.get("login")?,
         email: row.get("email")?,
         username: row.get("username")?,
+        region_code: row.get("region_code")?,
         password_hash: row.get("password_hash")?,
         role: row.get("role")?,
         title: row.get("title")?,
@@ -989,6 +1005,34 @@ fn deserialize_languages(value: &str) -> Vec<String> {
         .collect()
 }
 
+fn table_exists(connection: &Connection, table_name: &str) -> Result<bool, rusqlite::Error> {
+    connection
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1 LIMIT 1",
+            params![table_name],
+            |_| Ok(true),
+        )
+        .optional()
+        .map(|value| value.unwrap_or(false))
+}
+
+fn table_has_column(
+    connection: &Connection,
+    table_name: &str,
+    column_name: &str,
+) -> Result<bool, rusqlite::Error> {
+    let mut statement = connection.prepare(&format!("PRAGMA table_info({table_name})"))?;
+    let columns = statement.query_map([], |row| row.get::<_, String>(1))?;
+
+    for column in columns {
+        if column? == column_name {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
 fn migrate_legacy_schema(connection: &Connection) -> Result<(), rusqlite::Error> {
     let mut statement = connection.prepare("PRAGMA table_info(users)")?;
     let columns = statement.query_map([], |row| row.get::<_, String>(1))?;
@@ -1012,6 +1056,7 @@ fn migrate_legacy_schema(connection: &Connection) -> Result<(), rusqlite::Error>
                 login TEXT NOT NULL UNIQUE,
                 email TEXT NOT NULL UNIQUE,
                 username TEXT NOT NULL UNIQUE,
+                region_code TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL,
                 title TEXT,
@@ -1027,7 +1072,7 @@ fn migrate_legacy_schema(connection: &Connection) -> Result<(), rusqlite::Error>
             );
 
             INSERT INTO users (
-                id, login, email, username, password_hash, role, title, visibility,
+                id, login, email, username, region_code, password_hash, role, title, visibility,
                 tournaments_played, solved_problems, calibration_solved, leaderboard_rating,
                 leaderboard_hidden, is_banned, last_online_unix, created_at_unix
             )
@@ -1036,6 +1081,7 @@ fn migrate_legacy_schema(connection: &Connection) -> Result<(), rusqlite::Error>
                 login,
                 login || '@users.statecode.local',
                 username,
+                'UN',
                 password_hash,
                 'user',
                 NULL,
@@ -1054,6 +1100,14 @@ fn migrate_legacy_schema(connection: &Connection) -> Result<(), rusqlite::Error>
             DROP TABLE IF EXISTS sessions;
             DROP TABLE IF EXISTS problems;
             ",
+        )?;
+    }
+
+    if table_exists(connection, "users")? && !table_has_column(connection, "users", "region_code")?
+    {
+        connection.execute(
+            "ALTER TABLE users ADD COLUMN region_code TEXT NOT NULL DEFAULT 'UN'",
+            [],
         )?;
     }
 
