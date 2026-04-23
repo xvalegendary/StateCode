@@ -52,17 +52,3 @@ export const regionOptions: RegionOption[] = regionCodes.map((code) => ({
 export function regionName(code: string) {
   return displayName(code);
 }
-
-export function regionFlag(code: string) {
-  if (code === "UN") {
-    return "◇";
-  }
-
-  if (!/^[A-Z]{2}$/.test(code)) {
-    return "◇";
-  }
-
-  return String.fromCodePoint(
-    ...code.split("").map((character) => 127397 + character.charCodeAt(0))
-  );
-}

@@ -13,7 +13,8 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { leaderboardEntries as fallbackEntries } from "@/features/platform/data/catalog";
-import { regionFlag, regionName } from "@/features/platform/data/regions";
+import { RegionFlag } from "@/features/platform/components/region-flag";
+import { regionName } from "@/features/platform/data/regions";
 import {
   fetchLeaderboard,
   LeaderboardEntry
@@ -69,7 +70,10 @@ export function LeaderboardScreen() {
               </CardHeader>
               <CardContent className="space-y-1">
                 <div className="text-lg font-semibold">
-                  {regionFlag(leader.region_code)} {leader.username}
+                  <span className="inline-flex items-center gap-2">
+                    <RegionFlag code={leader.region_code} />
+                    {leader.username}
+                  </span>
                 </div>
                 <div className="text-xs text-muted-foreground">{leader.rating} rating</div>
               </CardContent>
@@ -124,8 +128,10 @@ export function LeaderboardScreen() {
                     <TableCell className="font-medium">{entry.rank}</TableCell>
                     <TableCell>{entry.username}</TableCell>
                     <TableCell title={regionName(entry.region_code)}>
-                      <span className="mr-2 text-base">{regionFlag(entry.region_code)}</span>
-                      {entry.region_code}
+                      <span className="inline-flex items-center gap-2">
+                        <RegionFlag code={entry.region_code} />
+                        {entry.region_code}
+                      </span>
                     </TableCell>
                     <TableCell>{entry.title || "Ranked"}</TableCell>
                     <TableCell>{entry.solved_problems}</TableCell>

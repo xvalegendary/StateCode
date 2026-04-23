@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import Script from "next/script";
 import { BootLoader } from "@/components/layout/boot-loader";
 import { Navbar } from "@/components/layout/navbar";
 import "./globals.css";
@@ -32,7 +33,9 @@ export default function RootLayout({
       className={cn(spaceGrotesk.variable, jetbrainsMono.variable)}
     >
       <body className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
-        <script
+        <Script
+          id="statecode-theme-init"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (() => {

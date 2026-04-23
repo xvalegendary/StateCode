@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff, ShieldCheck, Swords, Trophy } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,8 @@ import {
   fetchProfile,
   UserAdminRecord
 } from "@/features/platform/lib/platform-api";
-import { regionFlag, regionName } from "@/features/platform/data/regions";
+import { RegionFlag } from "@/features/platform/components/region-flag";
+import { regionName } from "@/features/platform/data/regions";
 import { cn } from "@/lib/utils";
 
 type ProfileView = {
@@ -88,22 +89,20 @@ function toProfileView(source: UserAdminRecord | AuthSession): ProfileView {
 
 export function ProfileScreen({ handle }: { handle: string }) {
   const normalizedHandle = handle.startsWith("@") ? handle : `@${handle}`;
-  const currentSession = useMemo(() => readAuthSession(), []);
-  const ownsProfile = currentSession?.username === normalizedHandle;
-  const [profile, setProfile] = useState<ProfileView | null>(
-    ownsProfile && currentSession ? toProfileView(currentSession) : null
-  );
-  const [status, setStatus] = useState<"loading" | "ready" | "unavailable">(
-    ownsProfile && currentSession ? "ready" : "loading"
-  );
+  const [profile, setProfile] = useState<ProfileView | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+  const [ownsProfile, setOwnsProfile] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadProfile = async () => {
       try {
+        const currentSession = readAuthSession();
+        const isOwnProfile = currentSession?.username === normalizedHandle;
+        setOwnsProfile(Boolean(isOwnProfile));
         const record =
-          ownsProfile && currentSession?.token
+          isOwnProfile && currentSession?.token
             ? await fetchCurrentUser(currentSession.token)
             : await fetchProfile(normalizedHandle);
 
@@ -111,7 +110,7 @@ export function ProfileScreen({ handle }: { handle: string }) {
           return;
         }
 
-        if (ownsProfile && currentSession?.token) {
+        if (isOwnProfile && currentSession?.token) {
           syncStoredSession(record);
         }
 
@@ -123,6 +122,7 @@ export function ProfileScreen({ handle }: { handle: string }) {
         }
 
         setProfile(null);
+        setOwnsProfile(false);
         setStatus("unavailable");
       }
     };
@@ -132,7 +132,7 @@ export function ProfileScreen({ handle }: { handle: string }) {
     return () => {
       cancelled = true;
     };
-  }, [currentSession, normalizedHandle, ownsProfile]);
+  }, [normalizedHandle]);
 
   if (status === "loading") {
     return (
@@ -198,7 +198,7 @@ export function ProfileScreen({ handle }: { handle: string }) {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline" className="rounded-none" title={regionName(profile.regionCode)}>
-                    <span className="text-base">{regionFlag(profile.regionCode)}</span>
+                    <RegionFlag code={profile.regionCode} />
                     {profile.regionCode}
                   </Badge>
                   <Badge variant="outline" className={cn("rounded-none", getRankPalette(profile.rank))}>
@@ -262,8 +262,9 @@ export function ProfileScreen({ handle }: { handle: string }) {
               </div>
               <div>
                 <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Region</div>
-                <div className="mt-1 font-medium">
-                  {regionFlag(profile.regionCode)} {regionName(profile.regionCode)}
+                <div className="mt-1 flex items-center gap-2 font-medium">
+                  <RegionFlag code={profile.regionCode} />
+                  {regionName(profile.regionCode)}
                 </div>
               </div>
               <div>

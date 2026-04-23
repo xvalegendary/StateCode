@@ -448,6 +448,15 @@ impl PlatformService for PlatformGrpcService {
     ) -> Result<Response<AdminActionResponse>, Status> {
         let payload = request.into_inner();
         self.require_staff(payload.token.trim())?;
+        let target = self
+            .store
+            .get_user_by_id(&payload.user_id)?
+            .ok_or_else(|| Status::not_found("user not found"))?;
+
+        if payload.is_banned && target.role == "admin" {
+            return Err(Status::permission_denied("admin accounts cannot be banned"));
+        }
+
         let user = self
             .store
             .set_user_ban_state(&payload.user_id, payload.is_banned)?;

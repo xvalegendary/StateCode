@@ -11,7 +11,8 @@ import {
   rankSystemSummary,
   ratingSystemSummary
 } from "@/features/auth/lib/session";
-import { regionFlag, regionName, regionOptions } from "@/features/platform/data/regions";
+import { RegionFlag } from "@/features/platform/components/region-flag";
+import { regionName, regionOptions } from "@/features/platform/data/regions";
 import { cn } from "@/lib/utils";
 
 function parseDate(value: string | null | undefined) {
@@ -74,7 +75,7 @@ export function UserProfilePanel({
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold">{session.username}</span>
-              <span title={regionName(profile.regionCode)}>{regionFlag(profile.regionCode)}</span>
+              <RegionFlag code={profile.regionCode} />
               <Badge variant="outline" className={cn("border-none px-0 text-xs", getRankPalette(profile.rank))}>
                 {profile.rank}
               </Badge>
@@ -136,7 +137,7 @@ export function UserProfilePanel({
           >
             {regionOptions.map((region) => (
               <option key={region.code} value={region.code}>
-                {regionFlag(region.code)} {region.name}
+                {region.code} - {region.name}
               </option>
             ))}
           </select>

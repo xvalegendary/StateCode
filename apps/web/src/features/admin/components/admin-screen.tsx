@@ -176,6 +176,7 @@ export function AdminScreen() {
                         variant="outline"
                         className="rounded-none"
                         onClick={() => runUserAction(user.user_id, "ban", { isBanned: !user.is_banned })}
+                        disabled={user.role === "admin" && !user.is_banned}
                       >
                         {user.is_banned ? "Unban" : "Ban"}
                       </Button>
