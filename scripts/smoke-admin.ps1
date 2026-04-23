@@ -80,6 +80,7 @@ try {
             status     = "Draft"
             timeLimit  = "1s"
             statement  = "Return the current smoke-test checksum."
+            languages  = @("C++17", "Rust", "Python 3.12")
         } | ConvertTo-Json)
 
     [pscustomobject]@{

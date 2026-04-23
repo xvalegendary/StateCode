@@ -22,6 +22,7 @@ export function AdminScreen() {
   const [role, setRole] = useState<"user" | "moderator" | "admin" | "">("");
   const [users, setUsers] = useState<UserAdminRecord[]>([]);
   const [problems, setProblems] = useState<ProblemRecord[]>([]);
+  const [supportedLanguages, setSupportedLanguages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: "",
@@ -29,7 +30,8 @@ export function AdminScreen() {
     difficulty: "4",
     status: "Draft",
     timeLimit: "2s",
-    statement: ""
+    statement: "",
+    languages: ["C++17", "Rust"]
   });
 
   const loadData = async (token: string) => {
@@ -39,6 +41,7 @@ export function AdminScreen() {
     ]);
     setUsers(usersPayload.users);
     setProblems(problemsPayload.problems);
+    setSupportedLanguages(problemsPayload.supported_languages);
   };
 
   useEffect(() => {
@@ -88,7 +91,8 @@ export function AdminScreen() {
       difficulty: Number(form.difficulty),
       status: form.status,
       timeLimit: form.timeLimit,
-      statement: form.statement
+      statement: form.statement,
+      languages: form.languages
     });
 
     setProblems((current) => [result.problem, ...current]);
@@ -98,8 +102,18 @@ export function AdminScreen() {
       difficulty: "4",
       status: "Draft",
       timeLimit: "2s",
-      statement: ""
+      statement: "",
+      languages: ["C++17", "Rust"]
     });
+  };
+
+  const toggleLanguage = (language: string) => {
+    setForm((current) => ({
+      ...current,
+      languages: current.languages.includes(language)
+        ? current.languages.filter((item) => item !== language)
+        : [...current.languages, language]
+    }));
   };
 
   if (error) {
@@ -252,6 +266,22 @@ export function AdminScreen() {
                     value={form.status}
                     onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
                   />
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium">Languages</div>
+                    <div className="flex flex-wrap gap-2">
+                      {supportedLanguages.map((language) => (
+                        <Button
+                          key={language}
+                          type="button"
+                          variant={form.languages.includes(language) ? "default" : "outline"}
+                          className="rounded-none"
+                          onClick={() => toggleLanguage(language)}
+                        >
+                          {language}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                   <Input
                     placeholder="Statement"
                     value={form.statement}
@@ -280,6 +310,13 @@ export function AdminScreen() {
                         <div className="font-medium">{problem.title}</div>
                         <div className="text-sm text-muted-foreground">
                           {problem.category} | Difficulty {problem.difficulty} | {problem.time_limit}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {problem.languages.map((language) => (
+                            <Badge key={`${problem.problem_id}-${language}`} variant="outline">
+                              {language}
+                            </Badge>
+                          ))}
                         </div>
                       </div>
                       <Badge variant="outline">{problem.status}</Badge>

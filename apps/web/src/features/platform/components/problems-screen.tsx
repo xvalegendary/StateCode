@@ -5,6 +5,7 @@ import { ArrowUpRight, FolderCode, TimerReset } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { readAuthSession } from "@/features/auth/lib/session";
 import {
   problemCategories as fallbackCategories,
   problems as fallbackProblems
@@ -21,7 +22,9 @@ const seededProblems: ProblemRecord[] = fallbackProblems.map((problem) => ({
   solved_count: problem.solvedCount,
   time_limit: problem.timeLimit,
   statement: problem.title,
-  created_at: new Date().toISOString()
+  created_at: new Date().toISOString(),
+  languages: ["C++17", "Rust", "Python 3.12"],
+  solved_by_current_user: false
 }));
 
 export function ProblemsScreen() {
@@ -29,7 +32,8 @@ export function ProblemsScreen() {
   const [problems, setProblems] = useState<ProblemRecord[]>(seededProblems);
 
   useEffect(() => {
-    fetchProblems()
+    const session = readAuthSession();
+    fetchProblems(session?.token)
       .then((payload) => {
         setCategories(payload.categories);
         setProblems(payload.problems);
@@ -77,6 +81,15 @@ export function ProblemsScreen() {
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline">{problem.category}</Badge>
+                  {problem.solved_by_current_user ? (
+                    <Badge
+                      variant="outline"
+                      className="rounded-none border-emerald-500/40 text-emerald-500"
+                    >
+                      <span className="mr-1 size-2 bg-emerald-500" />
+                      solved
+                    </Badge>
+                  ) : null}
                   <Badge variant="outline">Difficulty {problem.difficulty}</Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
@@ -88,6 +101,13 @@ export function ProblemsScreen() {
                     <FolderCode className="size-4" />
                     {problem.solved_count} solved
                   </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {problem.languages.map((language) => (
+                    <Badge key={`${problem.problem_id}-${language}`} variant="outline">
+                      {language}
+                    </Badge>
+                  ))}
                 </div>
                 <Button variant="outline" className="w-full justify-between rounded-none" asChild>
                   <a href="/solve">

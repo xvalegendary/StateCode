@@ -20,6 +20,8 @@ export type ProblemRecord = {
   time_limit: string;
   statement: string;
   created_at: string;
+  languages: string[];
+  solved_by_current_user: boolean;
 };
 
 export type UserAdminRecord = {
@@ -44,6 +46,30 @@ export type UserAdminRecord = {
   profile_url: string;
 };
 
+export type SandboxRunResult = {
+  submission_id: string | null;
+  verdict:
+    | "accepted"
+    | "compile-error"
+    | "runtime-error"
+    | "time-limit-exceeded"
+    | "output-limit-exceeded"
+    | "wrong-answer"
+    | "tool-unavailable"
+    | "internal-error";
+  language: string;
+  exit_code: number | null;
+  compile_stdout: string;
+  compile_stderr: string;
+  stdout: string;
+  stderr: string;
+  duration_ms: number;
+  time_limit_ms: number;
+  memory_limit_mb: number;
+  output_truncated: boolean;
+  work_dir: string;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 async function parseJson<T>(response: Response): Promise<T> {
@@ -61,9 +87,16 @@ export async function fetchLeaderboard() {
   return parseJson<{ entries: LeaderboardEntry[] }>(response);
 }
 
-export async function fetchProblems() {
-  const response = await fetch(`${API_BASE_URL}/problems`, { cache: "no-store" });
-  return parseJson<{ categories: string[]; problems: ProblemRecord[] }>(response);
+export async function fetchProblems(token?: string) {
+  const response = await fetch(`${API_BASE_URL}/problems`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    cache: "no-store"
+  });
+  return parseJson<{
+    categories: string[];
+    problems: ProblemRecord[];
+    supported_languages: string[];
+  }>(response);
 }
 
 export async function fetchProfile(handle: string) {
@@ -110,7 +143,11 @@ export async function fetchAdminProblems(token: string) {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store"
   });
-  return parseJson<{ categories: string[]; problems: ProblemRecord[] }>(response);
+  return parseJson<{
+    categories: string[];
+    problems: ProblemRecord[];
+    supported_languages: string[];
+  }>(response);
 }
 
 export async function postAdminUserAction<TBody extends object>(
@@ -140,6 +177,7 @@ export async function createAdminProblem(
     status: string;
     timeLimit: string;
     statement: string;
+    languages: string[];
   }
 ) {
   const response = await fetch(`${API_BASE_URL}/admin/problems`, {
@@ -152,4 +190,44 @@ export async function createAdminProblem(
   });
 
   return parseJson<{ message: string; problem: ProblemRecord }>(response);
+}
+
+export async function runSubmission(body: {
+  problemId: string;
+  language: string;
+  source: string;
+  stdin?: string;
+  expectedStdout?: string;
+  timeLimitMs?: number;
+  memoryLimitMb?: number;
+}) {
+  const response = await fetch(`${API_BASE_URL}/submissions/run`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  return parseJson<SandboxRunResult>(response);
+}
+
+export async function completeProblem(
+  token: string,
+  problem: Pick<ProblemRecord, "problem_id" | "slug" | "title">
+) {
+  const response = await fetch(`${API_BASE_URL}/submissions/complete`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      problemId: problem.problem_id,
+      problemSlug: problem.slug,
+      problemTitle: problem.title
+    })
+  });
+
+  return parseJson<UserAdminRecord>(response);
 }

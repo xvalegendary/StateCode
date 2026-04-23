@@ -35,6 +35,7 @@ pub struct StoredProblem {
     pub statement: String,
     pub languages: Vec<String>,
     pub created_at_unix: i64,
+    pub solved_by_current_user: bool,
 }
 
 #[derive(Debug, Clone)]

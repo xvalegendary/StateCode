@@ -20,8 +20,11 @@ use proto::platform_service_server::PlatformServiceServer;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = AppConfig::from_env();
-    let (store, bootstrap) =
-        AppStore::initialize(config.db_path.clone(), config.admin_credentials_path.clone()).await?;
+    let (store, bootstrap) = AppStore::initialize(
+        config.db_path.clone(),
+        config.admin_credentials_path.clone(),
+    )
+    .await?;
 
     println!(
         "[auth-rs] platform gRPC server listening on {}; sqlite db: {}",

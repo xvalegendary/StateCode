@@ -6,7 +6,9 @@ use tokio::fs;
 use tonic::Status;
 use uuid::Uuid;
 
-use crate::models::{LeaderboardUser, StoredProblem, StoredUser, CALIBRATION_TARGET};
+use crate::models::{
+    supported_languages, LeaderboardUser, StoredProblem, StoredUser, CALIBRATION_TARGET,
+};
 use crate::security::{generate_bootstrap_password, generate_session_token, hash_password};
 
 #[derive(Debug, Clone)]
@@ -78,19 +80,32 @@ impl AppStore {
                 solved_count INTEGER NOT NULL,
                 time_limit TEXT NOT NULL,
                 statement TEXT NOT NULL,
+                languages_csv TEXT NOT NULL,
                 created_at_unix INTEGER NOT NULL,
                 created_by_user_id TEXT NOT NULL,
                 FOREIGN KEY(created_by_user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS user_problem_solves (
+                user_id TEXT NOT NULL,
+                problem_id TEXT NOT NULL,
+                solved_at_unix INTEGER NOT NULL,
+                PRIMARY KEY(user_id, problem_id),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(problem_id) REFERENCES problems(problem_id) ON DELETE CASCADE
             );
 
             CREATE INDEX IF NOT EXISTS idx_users_login ON users(login);
             CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
             CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
             CREATE INDEX IF NOT EXISTS idx_problems_slug ON problems(slug);
+            CREATE INDEX IF NOT EXISTS idx_solves_user ON user_problem_solves(user_id);
             ",
         )?;
 
-        let admin_report = store.seed_admin(&connection, admin_credentials_path).await?;
+        let admin_report = store
+            .seed_admin(&connection, admin_credentials_path)
+            .await?;
         store.seed_demo_users(&connection)?;
         store.seed_problems(&connection)?;
 
@@ -126,8 +141,8 @@ impl AppStore {
         }
 
         let password = generate_bootstrap_password();
-        let password_hash = hash_password(&password)
-            .map_err(|error| std::io::Error::other(error.to_string()))?;
+        let password_hash =
+            hash_password(&password).map_err(|error| std::io::Error::other(error.to_string()))?;
         let now = unix_now();
 
         connection.execute(
@@ -164,10 +179,11 @@ impl AppStore {
     }
 
     fn seed_demo_users(&self, connection: &Connection) -> Result<(), Box<dyn std::error::Error>> {
-        let count: i64 =
-            connection.query_row("SELECT COUNT(*) FROM users WHERE role = 'user'", [], |row| {
-                row.get(0)
-            })?;
+        let count: i64 = connection.query_row(
+            "SELECT COUNT(*) FROM users WHERE role = 'user'",
+            [],
+            |row| row.get(0),
+        )?;
 
         if count > 0 {
             return Ok(());
@@ -214,7 +230,8 @@ impl AppStore {
     }
 
     fn seed_problems(&self, connection: &Connection) -> Result<(), Box<dyn std::error::Error>> {
-        let count: i64 = connection.query_row("SELECT COUNT(*) FROM problems", [], |row| row.get(0))?;
+        let count: i64 =
+            connection.query_row("SELECT COUNT(*) FROM problems", [], |row| row.get(0))?;
         if count > 0 {
             return Ok(());
         }
@@ -225,25 +242,109 @@ impl AppStore {
             |row| row.get(0),
         )?;
         let now = unix_now();
-        let seeds = [
-            ("Zero-Latency Relay", "Graphs", 4, "Popular", 842, "1s", "Find the minimum relay path across weighted network hops."),
-            ("Memory Safe Spiral", "Dynamic Programming", 6, "New", 391, "2s", "Count spiral states without revisiting forbidden cells."),
-            ("State Compression Arena", "Bitmask", 8, "Hard", 117, "2s", "Compress tournament state transitions with bitmask DP."),
-            ("Binary Harbor", "Binary Search", 3, "Classic", 1215, "1s", "Search the earliest feasible harbor slot under monotonic constraints."),
-            ("Contest Clock Drift", "Implementation", 2, "Warmup", 1631, "1s", "Repair contest timestamps after repeated drift adjustments."),
-            ("Weighted Portal Map", "Graphs", 7, "Featured", 209, "3s", "Route through portals with time-weighted cooldown penalties."),
-            ("Modulo Archive", "Math", 5, "Rated", 624, "2s", "Restore archived values after modular folding operations."),
-            ("Rope Merge Schedule", "Greedy", 5, "Practice", 577, "2s", "Minimize merge cost while respecting release windows."),
+        let seeds: [(&str, &str, i32, &str, i32, &str, &str, &[&str]); 8] = [
+            (
+                "Zero-Latency Relay",
+                "Graphs",
+                4,
+                "Popular",
+                842,
+                "1s",
+                "Find the minimum relay path across weighted network hops.",
+                &["C++17", "C++20", "Rust", "Go", "Java 21"],
+            ),
+            (
+                "Memory Safe Spiral",
+                "Dynamic Programming",
+                6,
+                "New",
+                391,
+                "2s",
+                "Count spiral states without revisiting forbidden cells.",
+                &["C++17", "Rust", "Python 3.12", "Kotlin"],
+            ),
+            (
+                "State Compression Arena",
+                "Bitmask",
+                8,
+                "Hard",
+                117,
+                "2s",
+                "Compress tournament state transitions with bitmask DP.",
+                &["C++20", "Rust", "Java 21"],
+            ),
+            (
+                "Binary Harbor",
+                "Binary Search",
+                3,
+                "Classic",
+                1215,
+                "1s",
+                "Search the earliest feasible harbor slot under monotonic constraints.",
+                &["C", "C++17", "Go", "Python 3.12", "JavaScript"],
+            ),
+            (
+                "Contest Clock Drift",
+                "Implementation",
+                2,
+                "Warmup",
+                1631,
+                "1s",
+                "Repair contest timestamps after repeated drift adjustments.",
+                &[
+                    "C",
+                    "C++17",
+                    "Rust",
+                    "Go",
+                    "Java 21",
+                    "Python 3.12",
+                    "JavaScript",
+                    "TypeScript",
+                    "C#",
+                ],
+            ),
+            (
+                "Weighted Portal Map",
+                "Graphs",
+                7,
+                "Featured",
+                209,
+                "3s",
+                "Route through portals with time-weighted cooldown penalties.",
+                &["C++20", "Rust", "Go", "Java 21"],
+            ),
+            (
+                "Modulo Archive",
+                "Math",
+                5,
+                "Rated",
+                624,
+                "2s",
+                "Restore archived values after modular folding operations.",
+                &["C++17", "C++20", "Rust", "Python 3.12"],
+            ),
+            (
+                "Rope Merge Schedule",
+                "Greedy",
+                5,
+                "Practice",
+                577,
+                "2s",
+                "Minimize merge cost while respecting release windows.",
+                &["C++17", "Rust", "Go", "Kotlin", "TypeScript"],
+            ),
         ];
 
-        for (title, category, difficulty, status, solved_count, time_limit, statement) in seeds {
+        for (title, category, difficulty, status, solved_count, time_limit, statement, languages) in
+            seeds
+        {
             connection.execute(
                 "
                 INSERT INTO problems (
                     problem_id, slug, title, category, difficulty, status, solved_count,
-                    time_limit, statement, created_at_unix, created_by_user_id
+                    time_limit, statement, languages_csv, created_at_unix, created_by_user_id
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                 ",
                 params![
                     problem_identifier(),
@@ -255,6 +356,7 @@ impl AppStore {
                     solved_count,
                     time_limit,
                     statement,
+                    serialize_languages(languages),
                     now,
                     admin_id
                 ],
@@ -337,12 +439,20 @@ impl AppStore {
 
     pub fn get_user_by_login(&self, login: &str) -> Result<Option<StoredUser>, Status> {
         let connection = self.connection()?;
-        query_user(&connection, "SELECT * FROM users WHERE login = ?1 LIMIT 1", params![login])
+        query_user(
+            &connection,
+            "SELECT * FROM users WHERE login = ?1 LIMIT 1",
+            params![login],
+        )
     }
 
     pub fn get_user_by_id(&self, user_id: &str) -> Result<Option<StoredUser>, Status> {
         let connection = self.connection()?;
-        query_user(&connection, "SELECT * FROM users WHERE id = ?1 LIMIT 1", params![user_id])
+        query_user(
+            &connection,
+            "SELECT * FROM users WHERE id = ?1 LIMIT 1",
+            params![user_id],
+        )
     }
 
     pub fn get_user_by_username(&self, username: &str) -> Result<Option<StoredUser>, Status> {
@@ -387,7 +497,11 @@ impl AppStore {
         Ok(())
     }
 
-    pub fn set_user_visibility(&self, user_id: &str, visibility: &str) -> Result<StoredUser, Status> {
+    pub fn set_user_visibility(
+        &self,
+        user_id: &str,
+        visibility: &str,
+    ) -> Result<StoredUser, Status> {
         self.execute_user_update(
             "UPDATE users SET visibility = ?2 WHERE id = ?1",
             params![user_id, visibility],
@@ -511,6 +625,100 @@ impl AppStore {
         )
     }
 
+    pub fn complete_problem(
+        &self,
+        user_id: &str,
+        problem_id: &str,
+        problem_slug: &str,
+        problem_title: &str,
+    ) -> Result<StoredUser, Status> {
+        let connection = self.connection()?;
+        let normalized_id = problem_id.trim();
+        let normalized_title = problem_title.trim();
+        let normalized_slug = if problem_slug.trim().is_empty() && !normalized_title.is_empty() {
+            slugify(normalized_title)
+        } else {
+            problem_slug.trim().to_lowercase()
+        };
+        let problem: Option<(String, i32)> = connection
+            .query_row(
+                "
+                SELECT problem_id, difficulty
+                FROM problems
+                WHERE problem_id = ?1
+                   OR slug = ?2
+                   OR lower(title) = lower(?3)
+                LIMIT 1
+                ",
+                params![normalized_id, normalized_slug, normalized_title],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|_| Status::internal("failed to query problem"))?;
+
+        let Some((resolved_problem_id, difficulty)) = problem else {
+            return Err(Status::not_found("problem not found"));
+        };
+
+        let inserted = connection
+            .execute(
+                "INSERT OR IGNORE INTO user_problem_solves (user_id, problem_id, solved_at_unix) VALUES (?1, ?2, ?3)",
+                params![user_id, resolved_problem_id, unix_now()],
+            )
+            .map_err(|_| Status::internal("failed to record solved problem"))?;
+
+        if inserted == 0 {
+            return self
+                .get_user_by_id(user_id)?
+                .ok_or_else(|| Status::not_found("user not found"));
+        }
+
+        let user = self
+            .get_user_by_id(user_id)?
+            .ok_or_else(|| Status::not_found("user not found"))?;
+        let solved_problems = user.solved_problems + 1;
+        let calibration_solved = (user.calibration_solved + 1).min(CALIBRATION_TARGET);
+        let leaderboard_rating = calculate_next_rating(
+            user.leaderboard_rating,
+            calibration_solved,
+            solved_problems,
+            difficulty,
+        );
+        let leaderboard_hidden = calibration_solved < CALIBRATION_TARGET;
+
+        connection
+            .execute(
+                "
+                UPDATE users
+                SET solved_problems = ?2,
+                    calibration_solved = ?3,
+                    leaderboard_rating = ?4,
+                    leaderboard_hidden = ?5,
+                    last_online_unix = ?6
+                WHERE id = ?1
+                ",
+                params![
+                    user_id,
+                    solved_problems,
+                    calibration_solved,
+                    leaderboard_rating,
+                    bool_to_int(leaderboard_hidden),
+                    unix_now()
+                ],
+            )
+            .map_err(|_| Status::internal("failed to update solved state"))?;
+
+        connection
+            .execute(
+                "UPDATE problems SET solved_count = solved_count + 1 WHERE problem_id = ?1",
+                params![resolved_problem_id],
+            )
+            .map_err(|_| Status::internal("failed to update problem solved count"))?;
+
+        self.get_user_by_id(user_id)?
+            .ok_or_else(|| Status::not_found("user not found"))
+    }
+
     fn execute_user_update<P: rusqlite::Params>(
         &self,
         query: &str,
@@ -526,20 +734,30 @@ impl AppStore {
             .ok_or_else(|| Status::not_found("user not found"))
     }
 
-    pub fn list_problems(&self) -> Result<Vec<StoredProblem>, Status> {
+    pub fn list_problems(
+        &self,
+        current_user_id: Option<&str>,
+    ) -> Result<Vec<StoredProblem>, Status> {
         let connection = self.connection()?;
         let mut statement = connection
             .prepare(
                 "
-                SELECT problem_id, slug, title, category, difficulty, status, solved_count,
-                       time_limit, statement, created_at_unix
-                FROM problems
+                SELECT p.problem_id, p.slug, p.title, p.category, p.difficulty, p.status,
+                       p.solved_count, p.time_limit, p.statement, p.languages_csv,
+                       p.created_at_unix,
+                       EXISTS(
+                           SELECT 1
+                           FROM user_problem_solves ups
+                           WHERE ups.problem_id = p.problem_id
+                             AND ups.user_id = ?1
+                       )
+                FROM problems p
                 ORDER BY created_at_unix DESC, title ASC
                 ",
             )
             .map_err(|_| Status::internal("failed to prepare problems query"))?;
         let rows = statement
-            .query_map([], |row| {
+            .query_map(params![current_user_id.unwrap_or("")], |row| {
                 Ok(StoredProblem {
                     problem_id: row.get(0)?,
                     slug: row.get(1)?,
@@ -550,7 +768,9 @@ impl AppStore {
                     solved_count: row.get(6)?,
                     time_limit: row.get(7)?,
                     statement: row.get(8)?,
-                    created_at_unix: row.get(9)?,
+                    languages: deserialize_languages(&row.get::<_, String>(9)?),
+                    created_at_unix: row.get(10)?,
+                    solved_by_current_user: row.get::<_, i64>(11)? == 1,
                 })
             })
             .map_err(|_| Status::internal("failed to query problems"))?;
@@ -578,6 +798,10 @@ impl AppStore {
         Ok(categories)
     }
 
+    pub fn list_supported_languages(&self) -> Vec<String> {
+        supported_languages()
+    }
+
     pub fn create_problem(
         &self,
         created_by_user_id: &str,
@@ -587,6 +811,7 @@ impl AppStore {
         status: &str,
         time_limit: &str,
         statement: &str,
+        languages: &[String],
     ) -> Result<StoredProblem, Status> {
         let connection = self.connection()?;
         let problem = StoredProblem {
@@ -599,7 +824,9 @@ impl AppStore {
             solved_count: 0,
             time_limit: time_limit.to_string(),
             statement: statement.to_string(),
+            languages: languages.to_vec(),
             created_at_unix: unix_now(),
+            solved_by_current_user: false,
         };
 
         connection
@@ -607,9 +834,9 @@ impl AppStore {
                 "
                 INSERT INTO problems (
                     problem_id, slug, title, category, difficulty, status, solved_count,
-                    time_limit, statement, created_at_unix, created_by_user_id
+                    time_limit, statement, languages_csv, created_at_unix, created_by_user_id
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8, ?9, ?10)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8, ?9, ?10, ?11)
                 ",
                 params![
                     problem.problem_id,
@@ -620,6 +847,7 @@ impl AppStore {
                     problem.status,
                     problem.time_limit,
                     problem.statement,
+                    serialize_languages(&problem.languages),
                     problem.created_at_unix,
                     created_by_user_id
                 ],
@@ -687,7 +915,25 @@ fn empty_to_null(value: &str) -> Option<String> {
 }
 
 fn bool_to_int(value: bool) -> i32 {
-    if value { 1 } else { 0 }
+    if value {
+        1
+    } else {
+        0
+    }
+}
+
+fn calculate_next_rating(
+    current_rating: Option<i32>,
+    calibration_solved: i32,
+    solved_problems: i32,
+    difficulty: i32,
+) -> Option<i32> {
+    if calibration_solved < CALIBRATION_TARGET {
+        return None;
+    }
+
+    let base = current_rating.unwrap_or(700 + solved_problems * 25);
+    Some(base + 8 + difficulty * 14)
 }
 
 fn unix_now() -> i64 {
@@ -702,7 +948,13 @@ fn slugify(value: &str) -> String {
         .trim()
         .to_lowercase()
         .chars()
-        .map(|character| if character.is_ascii_alphanumeric() { character } else { '-' })
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .split('-')
         .filter(|part| !part.is_empty())
@@ -713,6 +965,25 @@ fn slugify(value: &str) -> String {
 fn problem_identifier() -> String {
     let raw = Uuid::new_v4().simple().to_string().to_uppercase();
     format!("P-{}", &raw[..6])
+}
+
+fn serialize_languages<T: AsRef<str>>(languages: &[T]) -> String {
+    languages
+        .iter()
+        .map(AsRef::as_ref)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn deserialize_languages(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|language| !language.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 fn migrate_legacy_schema(connection: &Connection) -> Result<(), rusqlite::Error> {
@@ -728,62 +999,117 @@ fn migrate_legacy_schema(connection: &Connection) -> Result<(), rusqlite::Error>
         }
     }
 
-    if !has_users_table || has_email {
-        return Ok(());
+    if has_users_table && !has_email {
+        connection.execute_batch(
+            "
+            ALTER TABLE users RENAME TO users_legacy;
+
+            CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                login TEXT NOT NULL UNIQUE,
+                email TEXT NOT NULL UNIQUE,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL,
+                title TEXT,
+                visibility TEXT NOT NULL,
+                tournaments_played INTEGER NOT NULL,
+                solved_problems INTEGER NOT NULL,
+                calibration_solved INTEGER NOT NULL,
+                leaderboard_rating INTEGER,
+                leaderboard_hidden INTEGER NOT NULL,
+                is_banned INTEGER NOT NULL,
+                last_online_unix INTEGER NOT NULL,
+                created_at_unix INTEGER NOT NULL
+            );
+
+            INSERT INTO users (
+                id, login, email, username, password_hash, role, title, visibility,
+                tournaments_played, solved_problems, calibration_solved, leaderboard_rating,
+                leaderboard_hidden, is_banned, last_online_unix, created_at_unix
+            )
+            SELECT
+                id,
+                login,
+                login || '@users.statecode.local',
+                username,
+                password_hash,
+                'user',
+                NULL,
+                'public',
+                0,
+                0,
+                0,
+                NULL,
+                0,
+                0,
+                created_at_unix,
+                created_at_unix
+            FROM users_legacy;
+
+            DROP TABLE users_legacy;
+            DROP TABLE IF EXISTS sessions;
+            DROP TABLE IF EXISTS problems;
+            ",
+        )?;
     }
 
-    connection.execute_batch(
-        "
-        ALTER TABLE users RENAME TO users_legacy;
+    let mut problem_statement = connection.prepare("PRAGMA table_info(problems)")?;
+    let problem_columns = problem_statement.query_map([], |row| row.get::<_, String>(1))?;
+    let mut has_problems_table = false;
+    let mut has_languages_csv = false;
 
-        CREATE TABLE users (
-            id TEXT PRIMARY KEY,
-            login TEXT NOT NULL UNIQUE,
-            email TEXT NOT NULL UNIQUE,
-            username TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL,
-            title TEXT,
-            visibility TEXT NOT NULL,
-            tournaments_played INTEGER NOT NULL,
-            solved_problems INTEGER NOT NULL,
-            calibration_solved INTEGER NOT NULL,
-            leaderboard_rating INTEGER,
-            leaderboard_hidden INTEGER NOT NULL,
-            is_banned INTEGER NOT NULL,
-            last_online_unix INTEGER NOT NULL,
-            created_at_unix INTEGER NOT NULL
-        );
+    for column in problem_columns {
+        has_problems_table = true;
+        if column? == "languages_csv" {
+            has_languages_csv = true;
+        }
+    }
 
-        INSERT INTO users (
-            id, login, email, username, password_hash, role, title, visibility,
-            tournaments_played, solved_problems, calibration_solved, leaderboard_rating,
-            leaderboard_hidden, is_banned, last_online_unix, created_at_unix
-        )
-        SELECT
-            id,
-            login,
-            login || '@users.statecode.local',
-            username,
-            password_hash,
-            'user',
-            NULL,
-            'public',
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            0,
-            created_at_unix,
-            created_at_unix
-        FROM users_legacy;
+    if has_problems_table && !has_languages_csv {
+        connection.execute_batch(
+            "
+            ALTER TABLE problems RENAME TO problems_legacy;
 
-        DROP TABLE users_legacy;
-        DROP TABLE IF EXISTS sessions;
-        DROP TABLE IF EXISTS problems;
-        ",
-    )?;
+            CREATE TABLE problems (
+                problem_id TEXT PRIMARY KEY,
+                slug TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL,
+                difficulty INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                solved_count INTEGER NOT NULL,
+                time_limit TEXT NOT NULL,
+                statement TEXT NOT NULL,
+                languages_csv TEXT NOT NULL,
+                created_at_unix INTEGER NOT NULL,
+                created_by_user_id TEXT NOT NULL,
+                FOREIGN KEY(created_by_user_id) REFERENCES users(id)
+            );
+
+            INSERT INTO problems (
+                problem_id, slug, title, category, difficulty, status, solved_count,
+                time_limit, statement, languages_csv, created_at_unix, created_by_user_id
+            )
+            SELECT
+                problem_id,
+                slug,
+                title,
+                category,
+                difficulty,
+                status,
+                solved_count,
+                time_limit,
+                statement,
+                'C++17,Rust,Python 3.12',
+                created_at_unix,
+                created_by_user_id
+            FROM problems_legacy;
+
+            DROP TABLE problems_legacy;
+            ",
+        )?;
+    }
 
     Ok(())
 }

@@ -1,4 +1,7 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
+import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import grpc from "@grpc/grpc-js";
@@ -20,6 +23,21 @@ type CreateProblemBody = {
   status?: string;
   timeLimit?: string;
   statement?: string;
+  languages?: string[];
+};
+type RunSubmissionBody = {
+  problemId?: string;
+  language?: string;
+  source?: string;
+  stdin?: string;
+  expectedStdout?: string;
+  timeLimitMs?: number;
+  memoryLimitMb?: number;
+};
+type CompleteProblemBody = {
+  problemId?: string;
+  problemSlug?: string;
+  problemTitle?: string;
 };
 
 type AuthResponse = {
@@ -58,6 +76,8 @@ type ProblemRecord = {
   time_limit: string;
   statement: string;
   created_at: string;
+  languages: string[];
+  solved_by_current_user: boolean;
 };
 
 type AdminActionResponse = { message: string; user?: UserRecord };
@@ -105,11 +125,16 @@ type ProtoClient = grpc.Client & {
     ) => void
   ): void;
   listProblems(
-    request: Record<string, never>,
+    request: { token: string },
     callback: (
       error: grpc.ServiceError | null,
       response: { categories?: string[]; problems?: ProblemRecord[] }
+      & { supported_languages?: string[] }
     ) => void
+  ): void;
+  completeProblem(
+    request: { token: string; problem_id: string; problem_slug: string; problem_title: string },
+    callback: (error: grpc.ServiceError | null, response: UserRecord) => void
   ): void;
   listUsers(
     request: { token: string },
@@ -143,6 +168,7 @@ type ProtoClient = grpc.Client & {
     callback: (
       error: grpc.ServiceError | null,
       response: { categories?: string[]; problems?: ProblemRecord[] }
+      & { supported_languages?: string[] }
     ) => void
   ): void;
   createProblem(
@@ -154,6 +180,7 @@ type ProtoClient = grpc.Client & {
       status: string;
       time_limit: string;
       statement: string;
+      languages: string[];
     },
     callback: (
       error: grpc.ServiceError | null,
@@ -164,6 +191,13 @@ type ProtoClient = grpc.Client & {
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const protoPath = path.resolve(currentDir, "../../../packages/contracts/proto/auth.proto");
+const defaultExecutorPath = path.resolve(
+  currentDir,
+  process.platform === "win32"
+    ? "../../../apps/executor-rs/.cargo-artifacts/debug/executor-rs.exe"
+    : "../../../apps/executor-rs/.cargo-artifacts/debug/executor-rs"
+);
+const executorPath = process.env.EXECUTOR_BIN ?? defaultExecutorPath;
 const packageDefinition = protoLoader.loadSync(protoPath, {
   keepCase: true,
   longs: String,
@@ -280,6 +314,49 @@ function routeUserAction(pathname: string) {
   };
 }
 
+function runExecutor(payload: RunSubmissionBody) {
+  return new Promise<unknown>((resolve, reject) => {
+    if (!existsSync(executorPath)) {
+      reject(new Error("executor binary not found; run npm run build --workspace @judge/executor-rs"));
+      return;
+    }
+
+    const child = spawn(executorPath, [], {
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true
+    });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", () => {
+      try {
+        resolve(JSON.parse(stdout));
+      } catch {
+        reject(new Error(stderr || "executor returned invalid json"));
+      }
+    });
+    child.stdin.end(
+      JSON.stringify({
+        submission_id: payload.problemId ?? randomUUID(),
+        language: payload.language ?? "",
+        source: payload.source ?? "",
+        stdin: payload.stdin ?? "",
+        expected_stdout: payload.expectedStdout ?? undefined,
+        time_limit_ms: payload.timeLimitMs ?? 2000,
+        memory_limit_mb: payload.memoryLimitMb ?? 256,
+        output_limit_bytes: 262144
+      })
+    );
+  });
+}
+
 const server = createServer(async (request, response) => {
   if (!request.url || !request.method) {
     writeJson(request, response, 404, { error: "not found" });
@@ -365,7 +442,28 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === "GET" && pathname === "/problems") {
-      const result = await grpcCall(platformClient.listProblems.bind(platformClient), {});
+      const result = await grpcCall(platformClient.listProblems.bind(platformClient), {
+        token: bearerToken(request)
+      });
+      writeJson(request, response, 200, result);
+      return;
+    }
+
+    if (request.method === "POST" && pathname === "/submissions/run") {
+      const body = await readJson<RunSubmissionBody>(request);
+      const result = await runExecutor(body);
+      writeJson(request, response, 200, result);
+      return;
+    }
+
+    if (request.method === "POST" && pathname === "/submissions/complete") {
+      const body = await readJson<CompleteProblemBody>(request);
+      const result = await grpcCall(platformClient.completeProblem.bind(platformClient), {
+        token: bearerToken(request),
+        problem_id: body.problemId ?? "",
+        problem_slug: body.problemSlug ?? "",
+        problem_title: body.problemTitle ?? ""
+      });
       writeJson(request, response, 200, result);
       return;
     }
@@ -404,7 +502,8 @@ const server = createServer(async (request, response) => {
         difficulty: Number(body.difficulty ?? 0),
         status: body.status ?? "",
         time_limit: body.timeLimit ?? "",
-        statement: body.statement ?? ""
+        statement: body.statement ?? "",
+        languages: Array.isArray(body.languages) ? body.languages : []
       });
       writeJson(request, response, 201, result);
       return;

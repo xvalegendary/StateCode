@@ -1,14 +1,17 @@
 use tonic::{Request, Response, Status};
 
-use crate::models::{profile_url, to_iso, StoredProblem, StoredUser, CALIBRATION_TARGET};
+use crate::models::{
+    profile_url, supported_languages, to_iso, StoredProblem, StoredUser, CALIBRATION_TARGET,
+};
 use crate::proto::platform_service_server::PlatformService;
 use crate::proto::{
     AdminActionResponse, AdminAssignUserTitleRequest, AdminCreateProblemRequest,
     AdminProblemActionResponse, AdminSessionRequest, AdminSetUserBanStateRequest,
     AdminSetUserLeaderboardStateRequest, AdminSetUserRoleRequest, AdminUserTargetRequest,
-    AuthResponse, Empty, LeaderboardEntry, LeaderboardResponse, LoginRequest, PasswordResetRequest,
-    PasswordResetResponse, ProblemCatalogResponse, ProblemRecord, ProfileHandleRequest,
-    RegisterRequest, SessionRequest, UpdateProfileVisibilityRequest, UserListResponse, UserRecord,
+    AuthResponse, CompleteProblemRequest, Empty, LeaderboardEntry, LeaderboardResponse,
+    LoginRequest, PasswordResetRequest, PasswordResetResponse, ProblemCatalogRequest,
+    ProblemCatalogResponse, ProblemRecord, ProfileHandleRequest, RegisterRequest, SessionRequest,
+    UpdateProfileVisibilityRequest, UserListResponse, UserRecord,
 };
 use crate::rating::resolve_rank;
 use crate::security::{hash_password, verify_password};
@@ -64,7 +67,9 @@ impl PlatformGrpcService {
 
     fn validate_visibility(visibility: &str) -> Result<(), Status> {
         if !matches!(visibility, "public" | "private") {
-            return Err(Status::invalid_argument("visibility must be public or private"));
+            return Err(Status::invalid_argument(
+                "visibility must be public or private",
+            ));
         }
 
         Ok(())
@@ -114,7 +119,24 @@ impl PlatformGrpcService {
         }
 
         if !(1..=10).contains(&payload.difficulty) {
-            return Err(Status::invalid_argument("difficulty must be between 1 and 10"));
+            return Err(Status::invalid_argument(
+                "difficulty must be between 1 and 10",
+            ));
+        }
+
+        if payload.languages.is_empty() {
+            return Err(Status::invalid_argument(
+                "at least one programming language is required",
+            ));
+        }
+
+        let allowed = supported_languages();
+        for language in &payload.languages {
+            if !allowed.iter().any(|candidate| candidate == language) {
+                return Err(Status::invalid_argument(
+                    "unsupported programming language provided",
+                ));
+            }
         }
 
         Ok(())
@@ -193,6 +215,8 @@ impl PlatformGrpcService {
             time_limit: problem.time_limit.clone(),
             statement: problem.statement.clone(),
             created_at: to_iso(problem.created_at_unix),
+            languages: problem.languages.clone(),
+            solved_by_current_user: problem.solved_by_current_user,
         }
     }
 }
@@ -326,17 +350,49 @@ impl PlatformService for PlatformGrpcService {
 
     async fn list_problems(
         &self,
-        _request: Request<Empty>,
+        request: Request<ProblemCatalogRequest>,
     ) -> Result<Response<ProblemCatalogResponse>, Status> {
+        let payload = request.into_inner();
+        let current_user = if payload.token.trim().is_empty() {
+            None
+        } else {
+            Some(self.require_authenticated(payload.token.trim())?)
+        };
         let categories = self.store.list_problem_categories()?;
+        let supported_languages = self.store.list_supported_languages();
         let problems = self
             .store
-            .list_problems()?
+            .list_problems(current_user.as_ref().map(|user| user.id.as_str()))?
             .iter()
             .map(Self::to_problem_record)
             .collect();
 
-        Ok(Response::new(ProblemCatalogResponse { categories, problems }))
+        Ok(Response::new(ProblemCatalogResponse {
+            categories,
+            problems,
+            supported_languages,
+        }))
+    }
+
+    async fn complete_problem(
+        &self,
+        request: Request<CompleteProblemRequest>,
+    ) -> Result<Response<UserRecord>, Status> {
+        let payload = request.into_inner();
+        let actor = self.require_authenticated(payload.token.trim())?;
+        let problem_id = payload.problem_id.trim();
+        let problem_slug = payload.problem_slug.trim();
+        let problem_title = payload.problem_title.trim();
+
+        if problem_id.is_empty() && problem_slug.is_empty() && problem_title.is_empty() {
+            return Err(Status::invalid_argument("problem reference is required"));
+        }
+
+        let user =
+            self.store
+                .complete_problem(&actor.id, problem_id, problem_slug, problem_title)?;
+
+        Ok(Response::new(self.to_user_record(&user)?))
     }
 
     async fn list_users(
@@ -361,7 +417,9 @@ impl PlatformService for PlatformGrpcService {
     ) -> Result<Response<AdminActionResponse>, Status> {
         let payload = request.into_inner();
         self.require_staff(payload.token.trim())?;
-        let user = self.store.set_user_ban_state(&payload.user_id, payload.is_banned)?;
+        let user = self
+            .store
+            .set_user_ban_state(&payload.user_id, payload.is_banned)?;
 
         Ok(Response::new(AdminActionResponse {
             message: if payload.is_banned {
@@ -413,7 +471,9 @@ impl PlatformService for PlatformGrpcService {
     ) -> Result<Response<AdminActionResponse>, Status> {
         let payload = request.into_inner();
         self.require_staff(payload.token.trim())?;
-        let user = self.store.assign_user_title(&payload.user_id, &payload.title)?;
+        let user = self
+            .store
+            .assign_user_title(&payload.user_id, &payload.title)?;
 
         Ok(Response::new(AdminActionResponse {
             message: "user title updated".to_string(),
@@ -429,7 +489,9 @@ impl PlatformService for PlatformGrpcService {
         self.require_admin(payload.token.trim())?;
 
         if !matches!(payload.role.as_str(), "user" | "moderator" | "admin") {
-            return Err(Status::invalid_argument("role must be user, moderator, or admin"));
+            return Err(Status::invalid_argument(
+                "role must be user, moderator, or admin",
+            ));
         }
 
         let user = self.store.set_user_role(&payload.user_id, &payload.role)?;
@@ -447,14 +509,19 @@ impl PlatformService for PlatformGrpcService {
         let payload = request.into_inner();
         self.require_staff(payload.token.trim())?;
         let categories = self.store.list_problem_categories()?;
+        let supported_languages = self.store.list_supported_languages();
         let problems = self
             .store
-            .list_problems()?
+            .list_problems(None)?
             .iter()
             .map(Self::to_problem_record)
             .collect();
 
-        Ok(Response::new(ProblemCatalogResponse { categories, problems }))
+        Ok(Response::new(ProblemCatalogResponse {
+            categories,
+            problems,
+            supported_languages,
+        }))
     }
 
     async fn create_problem(
@@ -473,6 +540,7 @@ impl PlatformService for PlatformGrpcService {
             payload.status.trim(),
             payload.time_limit.trim(),
             payload.statement.trim(),
+            &payload.languages,
         )?;
 
         Ok(Response::new(AdminProblemActionResponse {

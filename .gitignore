@@ -8,6 +8,8 @@ coverage/
 target/
 apps/auth-rs/.cargo-artifacts/
 apps/auth-rs/.cargo-target/
+apps/auth-rs/.cargo-platform/
+apps/executor-rs/.cargo-artifacts/
 apps/auth-rs/data/*.db
 apps/auth-rs/data/admin-*.txt
 env-test.txt
