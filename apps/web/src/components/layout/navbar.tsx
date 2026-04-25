@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutGrid, LogIn, UserPlus } from "lucide-react";
+import { LayoutGrid, LogIn, Menu, UserPlus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navItems = [
+  { href: "/forum", label: "Forum" },
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/problems", label: "Problems" },
   { href: "/solve", label: "Solve" }
@@ -33,6 +34,7 @@ export function Navbar() {
   const [compact, setCompact] = useState(false);
   const [session, setSession] = useState<AuthSession | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -82,6 +84,11 @@ export function Navbar() {
     return () => window.removeEventListener("mousedown", onPointerDown);
   }, [profileOpen]);
 
+  useEffect(() => {
+    setMobileOpen(false);
+    setProfileOpen(false);
+  }, [pathname]);
+
   const handleToggleVisibility = async () => {
     if (!session?.token) {
       return;
@@ -119,6 +126,11 @@ export function Navbar() {
     session?.role === "admin" || session?.role === "moderator"
       ? [...navItems, { href: "/admin", label: "Admin" as const }]
       : navItems;
+  const isBannedRoute = pathname === "/banned";
+
+  if (isBannedRoute) {
+    return null;
+  }
 
   return (
     <header className="sticky top-0 z-50 px-4 pt-4">
@@ -136,7 +148,7 @@ export function Navbar() {
             StateCode
           </Link>
 
-          <nav className="flex flex-wrap items-center gap-1">
+          <nav className="hidden flex-wrap items-center gap-1 md:flex">
             {visibleNavItems.map((item) => {
               const isActive = pathname === item.href;
 
@@ -157,7 +169,7 @@ export function Navbar() {
             })}
           </nav>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="hidden flex-wrap items-center gap-2 md:flex">
             <ThemeToggle className="rounded-none" />
 
             {session ? (
@@ -202,7 +214,7 @@ export function Navbar() {
                 <Button variant="ghost" className="rounded-none" asChild>
                   <Link href="/login">
                     <LogIn className="size-4" />
-                    Log in
+                    Login
                   </Link>
                 </Button>
                 <Button className="rounded-none" asChild>
@@ -221,8 +233,134 @@ export function Navbar() {
               </Link>
             </Button>
           </div>
+
+          <div className="flex items-center gap-2 md:hidden">
+            <ThemeToggle className="rounded-none" />
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-none"
+              onClick={() => setMobileOpen((current) => !current)}
+            >
+              {mobileOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+            </Button>
+          </div>
         </div>
       </div>
+
+      {mobileOpen ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close mobile navigation"
+            className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm md:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
+          <aside className="fixed inset-y-0 right-0 z-50 flex w-[88vw] max-w-[360px] flex-col border-l bg-background md:hidden">
+            <div className="flex items-center justify-between border-b px-4 py-4">
+              <div>
+                <div className="text-sm font-semibold uppercase tracking-[0.22em]">StateCode</div>
+                <div className="text-xs text-muted-foreground">Navigation</div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-none"
+                onClick={() => setMobileOpen(false)}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+
+            <div className="flex-1 space-y-6 overflow-y-auto px-4 py-4">
+              {session ? (
+                <div className="border p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center border text-xs font-semibold">
+                      {avatarLabel}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{session.username}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {session.profile.rank}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                {visibleNavItems.map((item) => {
+                  const isActive = pathname === item.href;
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex min-h-11 items-center border px-4 text-sm",
+                        isActive
+                          ? "border-border bg-muted text-foreground"
+                          : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+
+                <Link
+                  href="/"
+                  className={cn(
+                    "flex min-h-11 items-center border px-4 text-sm",
+                    pathname === "/"
+                      ? "border-border bg-muted text-foreground"
+                      : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
+                  )}
+                >
+                  Dashboard
+                </Link>
+
+                {session ? (
+                  <Link
+                    href={`/${session.username}`}
+                    className="flex min-h-11 items-center border px-4 text-sm text-foreground"
+                  >
+                    Open profile
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="space-y-2 border-t px-4 py-4">
+              {session ? (
+                <Button
+                  variant="outline"
+                  className="w-full rounded-none"
+                  onClick={handleLogout}
+                >
+                  Log out
+                </Button>
+              ) : (
+                <>
+                  <Button variant="outline" className="w-full rounded-none" asChild>
+                    <Link href="/login">
+                      <LogIn className="size-4" />
+                      Login
+                    </Link>
+                  </Button>
+                  <Button className="w-full rounded-none" asChild>
+                    <Link href="/login?mode=signup">
+                      <UserPlus className="size-4" />
+                      Sign up
+                    </Link>
+                  </Button>
+                </>
+              )}
+            </div>
+          </aside>
+        </>
+      ) : null}
     </header>
   );
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
-import Script from "next/script";
+import { BannedRedirect } from "@/components/layout/banned-redirect";
 import { BootLoader } from "@/components/layout/boot-loader";
 import { Navbar } from "@/components/layout/navbar";
 import "./globals.css";
@@ -33,25 +33,7 @@ export default function RootLayout({
       className={cn(spaceGrotesk.variable, jetbrainsMono.variable)}
     >
       <body className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
-        <Script
-          id="statecode-theme-init"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              (() => {
-                try {
-                  const saved = localStorage.getItem("statecode-theme");
-                  const theme = saved === "dark" || saved === "light"
-                    ? saved
-                    : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-                  const root = document.documentElement;
-                  root.classList.toggle("dark", theme === "dark");
-                  root.style.colorScheme = theme;
-                } catch (_) {}
-              })();
-            `
-          }}
-        />
+        <BannedRedirect />
         <BootLoader />
         <Navbar />
         {children}

@@ -12,6 +12,8 @@
     "dev": "turbo run dev --parallel",
     "dev:web": "npm run dev --workspace @judge/web",
     "build:web": "npm run build --workspace @judge/web",
+    "test:e2e:api:py": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/run-api-e2e.ps1",
+    "test:e2e:web:py": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/run-web-e2e.ps1",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"

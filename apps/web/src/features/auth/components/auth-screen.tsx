@@ -243,7 +243,7 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
                       className="rounded-none"
                       onClick={() => switchMode("login")}
                     >
-                      Log in
+                      Login
                     </Button>
                     <Button
                       type="button"
@@ -257,7 +257,7 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
 
                   <div className="space-y-2">
                     <CardTitle className="text-2xl">
-                      {mode === "login" ? "Log in to StateCode" : "Create StateCode account"}
+                      {mode === "login" ? "Login to StateCode" : "Create StateCode account"}
                     </CardTitle>
                     <p className="text-sm text-muted-foreground">
                       {mode === "login"
@@ -341,7 +341,7 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
                           className="w-full rounded-none"
                           disabled={isSubmitting}
                         >
-                          {isSubmitting ? "Signing in..." : "Log in"}
+                          {isSubmitting ? "Signing in..." : "Login"}
                           <ArrowRight className="size-4" />
                         </Button>
 
@@ -491,7 +491,7 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
                           onClick={() => switchMode("login")}
                           className="block w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
                         >
-                          Already registered? Switch to log in
+                          Already registered? Switch to login
                         </button>
                       </form>
                     )}

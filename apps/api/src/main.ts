@@ -2,11 +2,13 @@ import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import type { Socket } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import grpc from "@grpc/grpc-js";
 import protoLoader from "@grpc/proto-loader";
 import { apiApp } from "./app/app.js";
+import { ForumService, isWebSocketUpgrade } from "./app/forum.js";
 
 type LoginBody = { login?: string; password?: string };
 type RegisterBody = { login?: string; password?: string; username?: string };
@@ -59,6 +61,22 @@ type SubmissionQueueItem = {
   runtime: string;
   memory: string;
   startedAt: number;
+};
+type SubmissionTraceRecord = SubmissionQueueItem & {
+  verdict: string;
+  stdout: string;
+  stderr: string;
+  compile_stderr: string;
+  compile_stdout: string;
+  exit_code: number | null;
+  expected_stdout: string;
+  stdin: string;
+  work_dir: string;
+  output_truncated: boolean;
+  worker_pool: "KPL1" | "KPL2" | "KPL3";
+};
+type OperationsActionBody = {
+  action?: string;
 };
 type CompleteProblemBody = {
   problemId?: string;
@@ -250,8 +268,10 @@ const platformClient = new PlatformService(
   grpc.credentials.createInsecure()
 ) as unknown as ProtoClient;
 
+const forumService = new ForumService();
 const activeSubmissions = new Map<string, SubmissionQueueItem>();
-const submissionHistory: SubmissionQueueItem[] = [];
+const submissionHistory: SubmissionTraceRecord[] = [];
+const drainedPools = new Set<"KPL1" | "KPL2" | "KPL3">();
 
 const allowedOrigins = new Set(
   (process.env.ALLOWED_ORIGINS ?? "http://localhost:3000,http://127.0.0.1:3000")
@@ -393,7 +413,8 @@ function queueItemFromResult(
   id: string,
   payload: RunSubmissionBody,
   result: SandboxRunResult
-): SubmissionQueueItem {
+): SubmissionTraceRecord {
+  const workerPool = workerPoolForLanguage(result.language || payload.language || "unknown");
   return {
     id,
     problem: payload.problemId ?? "manual-run",
@@ -402,7 +423,18 @@ function queueItemFromResult(
     tests: result.verdict === "accepted" ? "1 / 1" : "0 / 1",
     runtime: `${result.duration_ms}ms`,
     memory: `${result.memory_limit_mb} MB limit`,
-    startedAt: Date.now()
+    startedAt: Date.now(),
+    verdict: result.verdict,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    compile_stderr: result.compile_stderr,
+    compile_stdout: result.compile_stdout,
+    exit_code: result.exit_code,
+    expected_stdout: payload.expectedStdout ?? "",
+    stdin: payload.stdin ?? "",
+    work_dir: result.work_dir,
+    output_truncated: result.output_truncated,
+    worker_pool: workerPool
   };
 }
 
@@ -480,6 +512,7 @@ function buildOperationsSnapshot() {
     const active = [...activeSubmissions.values()].filter(
       (item) => workerPoolForLanguage(item.language) === pool
     ).length;
+    const effectiveCapacity = drainedPools.has(pool) ? Math.max(active, total - 1) : total;
 
     return {
       name:
@@ -488,8 +521,9 @@ function buildOperationsSnapshot() {
           : pool === "KPL2"
             ? "KPL2 native pool"
             : "KPL3 managed runtime pool",
-      utilization: Math.min(100, Math.round((active / total) * 100)),
-      active: `${active} / ${total} active`
+      utilization:
+        effectiveCapacity === 0 ? 0 : Math.min(100, Math.round((active / effectiveCapacity) * 100)),
+      active: `${active} / ${effectiveCapacity} active${drainedPools.has(pool) ? " (drained)" : ""}`
     };
   });
   const totalWorkers = pools.reduce((sum, pool) => {
@@ -531,10 +565,101 @@ function buildOperationsSnapshot() {
     notes: [
       `Executor binary ${existsSync(executorPath) ? "available" : "missing"}`,
       `${submissionHistory.length} submissions recorded since API start`,
-      `${activeSubmissions.size} submissions currently executing`
+      `${activeSubmissions.size} submissions currently executing`,
+      drainedPools.size > 0
+        ? `Drained pools: ${[...drainedPools].join(", ")}`
+        : "No drained pools"
     ],
     quick_actions: ["Open submission trace", "Inspect failed testcase", "Drain noisy worker"]
   };
+}
+
+function previewText(value: string, limit = 240) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "(empty)";
+  }
+
+  return trimmed.length > limit ? `${trimmed.slice(0, limit)}...` : trimmed;
+}
+
+function runOperationsAction(action: string) {
+  if (action === "Open submission trace") {
+    const latest = submissionHistory[0] ?? null;
+    if (!latest) {
+      return {
+        message: "No submission trace is available yet.",
+        details: null
+      };
+    }
+
+    return {
+      message: `Trace opened for ${latest.id}.`,
+      details: {
+        submission: latest.id,
+        problem: latest.problem,
+        language: latest.language,
+        workerPool: latest.worker_pool,
+        verdict: latest.status,
+        runtime: latest.runtime,
+        memory: latest.memory,
+        stdin: previewText(latest.stdin),
+        stdout: previewText(latest.stdout),
+        stderr: previewText(latest.stderr || latest.compile_stderr)
+      }
+    };
+  }
+
+  if (action === "Inspect failed testcase") {
+    const failed = submissionHistory.find((item) => item.status !== "Accepted") ?? null;
+    if (!failed) {
+      return {
+        message: "No failed submission is available for inspection.",
+        details: null
+      };
+    }
+
+    return {
+      message: `Inspection prepared for ${failed.id}.`,
+      details: {
+        submission: failed.id,
+        problem: failed.problem,
+        language: failed.language,
+        workerPool: failed.worker_pool,
+        verdict: failed.status,
+        runtime: failed.runtime,
+        memory: failed.memory,
+        stdin: previewText(failed.stdin),
+        expectedStdout: previewText(failed.expected_stdout),
+        stdout: previewText(failed.stdout),
+        stderr: previewText(failed.stderr || failed.compile_stderr)
+      }
+    };
+  }
+
+  if (action === "Drain noisy worker") {
+    const hottestPool = (["KPL1", "KPL2", "KPL3"] as const)
+      .map((pool) => ({
+        pool,
+        active: [...activeSubmissions.values()].filter(
+          (item) => workerPoolForLanguage(item.language) === pool
+        ).length
+      }))
+      .sort((left, right) => right.active - left.active)[0];
+
+    const selectedPool = hottestPool?.active ? hottestPool.pool : "KPL2";
+    drainedPools.add(selectedPool);
+
+    return {
+      message: `${selectedPool} marked as drained for new work in the current API session.`,
+      details: {
+        pool: selectedPool,
+        activeJobs: hottestPool?.active ?? 0
+      }
+    };
+  }
+
+  throw new Error("unsupported operator action");
 }
 
 const server = createServer(async (request, response) => {
@@ -639,8 +764,24 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "GET" && pathname === "/forum") {
+      writeJson(request, response, 200, {
+        websocket_url: "/forum/ws",
+        mode: "websocket"
+      });
+      return;
+    }
+
     if (request.method === "GET" && pathname === "/operations") {
       writeJson(request, response, 200, buildOperationsSnapshot());
+      return;
+    }
+
+    if (request.method === "POST" && pathname === "/operations/actions") {
+      const body = await readJson<OperationsActionBody>(request);
+      const action = body.action ?? "";
+      const result = runOperationsAction(action);
+      writeJson(request, response, 200, result);
       return;
     }
 
@@ -799,6 +940,30 @@ const server = createServer(async (request, response) => {
   }
 
   writeJson(request, response, 404, { error: "not found" });
+});
+
+server.on("upgrade", async (request, socket) => {
+  const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+  if (!isWebSocketUpgrade(request, url.pathname)) {
+    socket.destroy();
+    return;
+  }
+
+  const origin = request.headers.origin;
+  if (origin && !allowedOrigins.has(origin)) {
+    socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+
+  const token = url.searchParams.get("token") ?? "";
+  const viewer = await forumService.resolveViewer(token, async (sessionToken) =>
+    grpcCall(platformClient.getCurrentUser.bind(platformClient), {
+      token: sessionToken
+    })
+  );
+
+  forumService.attachSocket(request, socket as Socket, viewer);
 });
 
 server.listen(apiApp.port, () => {

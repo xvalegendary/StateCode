@@ -25,7 +25,9 @@ import {
 } from "@/components/ui/table";
 import {
   fetchOperations,
-  OperationsSnapshot
+  OperationsActionResponse,
+  OperationsSnapshot,
+  runOperationsAction
 } from "@/features/platform/lib/platform-api";
 
 const emptyOperations: OperationsSnapshot = {
@@ -73,11 +75,24 @@ function getStatusVariant(status: string): "secondary" | "default" | "outline" {
 
 export function ControlRoomScreen() {
   const [operations, setOperations] = useState<OperationsSnapshot>(emptyOperations);
+  const [actionState, setActionState] = useState<{
+    active: string | null;
+    result: OperationsActionResponse | null;
+    error: string | null;
+  }>({
+    active: null,
+    result: null,
+    error: null
+  });
 
-  useEffect(() => {
+  const loadOperations = () => {
     fetchOperations()
       .then(setOperations)
       .catch(() => setOperations(emptyOperations));
+  };
+
+  useEffect(() => {
+    loadOperations();
   }, []);
 
   const syncLabel = operations.synced_at
@@ -257,12 +272,59 @@ export function ControlRoomScreen() {
                   <Badge key={note} variant="outline">{note}</Badge>
                 ))}
               </CardContent>
-              <CardFooter className="flex flex-wrap gap-2">
+              <CardFooter className="flex flex-col items-stretch gap-3">
+                {(actionState.result || actionState.error) ? (
+                  <div className="border p-3 text-sm">
+                    <div className="font-medium">
+                      {actionState.error ?? actionState.result?.message}
+                    </div>
+                    {actionState.result?.details ? (
+                      <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                        {Object.entries(actionState.result.details).map(([key, value]) => (
+                          <div key={key} className="flex items-start justify-between gap-3 border-b pb-2">
+                            <span className="uppercase tracking-[0.16em]">{key}</span>
+                            <span className="max-w-[60%] text-right text-foreground">
+                              {String(value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap gap-2">
                 {operations.quick_actions.map((action) => (
-                  <Button key={action} variant="ghost">
-                    {action}
+                  <Button
+                    key={action}
+                    variant="ghost"
+                    disabled={actionState.active !== null}
+                    onClick={async () => {
+                      setActionState({ active: action, result: null, error: null });
+                      try {
+                        const result = await runOperationsAction(action);
+                        setActionState({ active: null, result, error: null });
+                        loadOperations();
+                      } catch (error) {
+                        setActionState({
+                          active: null,
+                          result: null,
+                          error: error instanceof Error ? error.message : "operator action failed"
+                        });
+                      }
+                    }}
+                  >
+                    {actionState.active === action ? "Running..." : action}
                   </Button>
                 ))}
+                  <Button
+                    variant="outline"
+                    onClick={loadOperations}
+                    disabled={actionState.active !== null}
+                  >
+                    Refresh
+                  </Button>
+                </div>
               </CardFooter>
             </Card>
           </div>

@@ -106,6 +106,11 @@ export type OperationsSnapshot = {
   quick_actions: string[];
 };
 
+export type OperationsActionResponse = {
+  message: string;
+  details: Record<string, string | number | boolean | null> | null;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 async function parseJson<T>(response: Response): Promise<T> {
@@ -145,6 +150,18 @@ export async function fetchProfile(handle: string) {
 export async function fetchOperations() {
   const response = await fetch(`${API_BASE_URL}/operations`, { cache: "no-store" });
   return parseJson<OperationsSnapshot>(response);
+}
+
+export async function runOperationsAction(action: string) {
+  const response = await fetch(`${API_BASE_URL}/operations/actions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ action })
+  });
+
+  return parseJson<OperationsActionResponse>(response);
 }
 
 export async function fetchCurrentUser(token: string) {

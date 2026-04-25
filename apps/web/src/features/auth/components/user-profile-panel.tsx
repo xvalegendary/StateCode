@@ -84,7 +84,7 @@ export function UserProfilePanel({
             <div className="text-xs text-muted-foreground">{profile.profileUrl}</div>
           </div>
         </div>
-        <Button variant="ghost" className="rounded-none px-2" onClick={onLogout}>
+        <Button variant="ghost" className="rounded-none px--10" onClick={onLogout}>
           <LogOut className="size-4" />
         </Button>
       </div>

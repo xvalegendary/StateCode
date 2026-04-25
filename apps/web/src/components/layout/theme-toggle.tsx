@@ -10,6 +10,7 @@ type Theme = "light" | "dark";
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
   root.classList.toggle("dark", theme === "dark");
+  root.classList.toggle("light", theme === "light");
   root.style.colorScheme = theme;
 }
 

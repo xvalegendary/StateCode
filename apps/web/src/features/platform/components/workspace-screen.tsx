@@ -110,7 +110,7 @@ export function WorkspaceScreen({ problemId }: { problemId: string }) {
             );
           }
         } else {
-          setCompletionError("Log in to save solved progress.");
+          setCompletionError("Login to save solved progress.");
         }
       }
     } catch (error) {

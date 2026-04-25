@@ -2,6 +2,11 @@ node_modules/
 .turbo/
 dist/
 coverage/
+.next/
+*.tsbuildinfo
+__pycache__/
+*.pyc
+*.pyo
 .env
 .DS_Store
 *.log
@@ -9,7 +14,9 @@ target/
 apps/auth-rs/.cargo-artifacts/
 apps/auth-rs/.cargo-target/
 apps/auth-rs/.cargo-platform/
+apps/auth-rs/.cargo-e2e/
 apps/executor-rs/.cargo-artifacts/
+apps/executor-rs/.cargo-e2e/
 apps/auth-rs/data/*.db
 apps/auth-rs/data/admin-*.txt
 env-test.txt

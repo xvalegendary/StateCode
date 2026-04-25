@@ -47,7 +47,7 @@ export function AdminScreen() {
   useEffect(() => {
     const session = readAuthSession();
     if (!session) {
-      setError("Log in as admin to open the platform panel.");
+      setError("Login as admin to open the platform panel.");
       return;
     }
 
