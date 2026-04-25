@@ -211,262 +211,296 @@ export function AuthScreen({ initialMode }: { initialMode: AuthMode }) {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-10 md:px-8 lg:px-10">
-      <section className="w-full max-w-md">
-        <Card className="border bg-card">
-          <CardHeader className="space-y-6">
-            <div className="space-y-2 text-center">
-              <CardTitle className="text-2xl">StateCode</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                {mode === "login"
-                  ? "Enter your credentials to continue."
-                  : "Create an account to start using StateCode."}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant={mode === "login" ? "secondary" : "ghost"}
-                onClick={() => switchMode("login")}
-              >
-                Log in
-              </Button>
-              <Button
-                type="button"
-                variant={mode === "signup" ? "secondary" : "ghost"}
-                onClick={() => switchMode("signup")}
-              >
-                Sign up
-              </Button>
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-6">
-            {notice ? (
-              <div
-                className={cn(
-                  "border px-3 py-2 text-sm",
-                  notice.type === "error"
-                    ? "border-destructive/30 bg-destructive/10 text-destructive"
-                    : "border-primary/30 bg-primary/10 text-foreground"
-                )}
-              >
-                {notice.text}
+      <section className="w-full max-w-[920px] border bg-background">
+        <div className="grid min-h-[640px] md:grid-cols-[0.9fr_1.1fr]">
+          <div className="flex flex-col justify-between border-b p-6 md:border-b-0 md:border-r md:p-8">
+            <div className="space-y-10">
+              <div className="space-y-4">
+                <div className="inline-flex border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground">
+                  StateCode access
+                </div>
+                <div className="space-y-3">
+                  <h1 className="max-w-xs text-4xl font-semibold tracking-tight md:text-5xl">
+                    Enter the judge without visual noise.
+                  </h1>
+                  <p className="max-w-sm text-sm leading-6 text-muted-foreground">
+                    Clean auth surface for login, registration, and account recovery. No filler,
+                    just account access.
+                  </p>
+                </div>
               </div>
-            ) : null}
+            </div>
+          </div>
 
-            <div
-              key={mode}
-              className={cn(
-                "space-y-5 transition-all duration-200 ease-out",
-                phase === "idle" && "translate-x-0 opacity-100",
-                phase === "exit" && direction === "forward" && "-translate-x-4 opacity-0",
-                phase === "exit" && direction === "backward" && "translate-x-4 opacity-0",
-                phase === "enter" && direction === "forward" && "translate-x-4 opacity-0",
-                phase === "enter" && direction === "backward" && "-translate-x-4 opacity-0"
-              )}
-            >
-              {mode === "login" ? (
-                <form className="space-y-5" onSubmit={handleLoginSubmit}>
+          <div className="flex items-center justify-center p-6 md:p-10 lg:p-12">
+            <div className="w-full max-w-[420px] space-y-6">
+              <Card className="border-none bg-transparent shadow-none ring-0">
+                <CardHeader className="space-y-5 px-0 pt-0">
+                  <div className="grid grid-cols-2 gap-2 p-1">
+                    <Button
+                      type="button"
+                      variant={mode === "login" ? "default" : "ghost"}
+                      className="rounded-none"
+                      onClick={() => switchMode("login")}
+                    >
+                      Log in
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={mode === "signup" ? "default" : "ghost"}
+                      className="rounded-none"
+                      onClick={() => switchMode("signup")}
+                    >
+                      Sign up
+                    </Button>
+                  </div>
+
                   <div className="space-y-2">
-                    <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+                    <CardTitle className="text-2xl">
+                      {mode === "login" ? "Log in to StateCode" : "Create StateCode account"}
+                    </CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      Log in to continue to your workspace.
+                      {mode === "login"
+                        ? "Use your login and password to continue."
+                        : "Create a login, choose a @username, and start solving."}
                     </p>
                   </div>
+                </CardHeader>
 
-                  <label className="space-y-2">
-                    <span className="text-sm font-medium">Login</span>
-                    <Input
-                      type="text"
-                      placeholder="statecode_login"
-                      value={loginValue}
-                      onChange={(event) => setLoginValue(event.target.value)}
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-sm font-medium">Password</span>
-                    <Input
-                      type="password"
-                      placeholder="********"
-                      value={loginPassword}
-                      onChange={(event) => setLoginPassword(event.target.value)}
-                    />
-                  </label>
-
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <label className="inline-flex items-center gap-2 text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        className="size-4 rounded border border-input bg-background accent-[var(--primary)]"
-                      />
-                      Remember me
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowReset((value) => !value)}
-                      className="text-muted-foreground transition-colors hover:text-foreground"
+                <CardContent className="space-y-5 px-0 pb-0">
+                  {notice ? (
+                    <div
+                      className={cn(
+                        "border px-3 py-2 text-sm",
+                        notice.type === "error"
+                          ? "border-destructive/30 bg-destructive/10 text-destructive"
+                          : "border-primary/30 bg-primary/10 text-foreground"
+                      )}
                     >
-                      Forgot password?
-                    </button>
-                  </div>
-
-                  <Button type="submit" className="w-full" disabled={isSubmitting}>
-                    {isSubmitting ? "Signing in..." : "Log in"}
-                    <ArrowRight className="size-4" />
-                  </Button>
+                      {notice.text}
+                    </div>
+                  ) : null}
 
                   <div
+                    key={mode}
                     className={cn(
-                      "overflow-hidden border bg-muted/40 transition-all duration-300",
-                      showReset
-                        ? "max-h-52 p-4 opacity-100"
-                        : "max-h-0 border-transparent p-0 opacity-0"
+                      "space-y-5 transition-all duration-200 ease-out",
+                      phase === "idle" && "translate-x-0 opacity-100",
+                      phase === "exit" && direction === "forward" && "-translate-x-4 opacity-0",
+                      phase === "exit" && direction === "backward" && "translate-x-4 opacity-0",
+                      phase === "enter" && direction === "forward" && "translate-x-4 opacity-0",
+                      phase === "enter" && direction === "backward" && "-translate-x-4 opacity-0"
                     )}
                   >
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-9 items-center justify-center border bg-background">
-                          <KeyRound className="size-4 text-muted-foreground" />
+                    {mode === "login" ? (
+                      <form className="space-y-5" onSubmit={handleLoginSubmit}>
+                        <div className="space-y-4">
+                          <label className="space-y-2">
+                            <span className="text-sm font-medium">Login</span>
+                            <Input
+                              type="text"
+                              placeholder="statecode_login"
+                              value={loginValue}
+                              onChange={(event) => setLoginValue(event.target.value)}
+                              className="rounded-none"
+                            />
+                          </label>
+
+                          <label className="space-y-2">
+                            <span className="text-sm font-medium">Password</span>
+                            <Input
+                              type="password"
+                              placeholder="********"
+                              value={loginPassword}
+                              onChange={(event) => setLoginPassword(event.target.value)}
+                              className="rounded-none"
+                            />
+                          </label>
                         </div>
-                        <div>
-                          <div className="text-sm font-medium">Reset password</div>
-                          <div className="text-xs text-muted-foreground">
-                            Recovery is prepared for the login you enter below.
+
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <label className="inline-flex items-center gap-2 text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              className="size-4 border border-input bg-background accent-[var(--primary)]"
+                            />
+                            Remember me
+                          </label>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowReset((value) => !value)}
+                            className="text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            Forgot password?
+                          </button>
+                        </div>
+
+                        <Button
+                          type="submit"
+                          className="w-full rounded-none"
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? "Signing in..." : "Log in"}
+                          <ArrowRight className="size-4" />
+                        </Button>
+
+                        <div
+                          className={cn(
+                            "overflow-hidden border transition-all duration-300",
+                            showReset
+                              ? "max-h-56 px-4 py-4 opacity-100"
+                              : "max-h-0 border-transparent px-4 py-0 opacity-0"
+                          )}
+                        >
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                              <div className="flex size-9 items-center justify-center border">
+                                <KeyRound className="size-4 text-muted-foreground" />
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium">Password recovery</div>
+                                <div className="text-xs text-muted-foreground">
+                                  Send reset instructions by account login.
+                                </div>
+                              </div>
+                            </div>
+
+                            <label className="space-y-2">
+                              <span className="text-sm font-medium">Account login</span>
+                              <Input
+                                type="text"
+                                placeholder="statecode_login"
+                                value={resetLogin}
+                                onChange={(event) => setResetLogin(event.target.value)}
+                                className="rounded-none"
+                              />
+                            </label>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full rounded-none"
+                              disabled={isSubmitting}
+                              onClick={handleResetSubmit}
+                            >
+                              {isSubmitting ? "Sending..." : "Send recovery link"}
+                            </Button>
                           </div>
                         </div>
-                      </div>
 
-                      <label className="space-y-2">
-                        <span className="text-sm font-medium">Account login</span>
-                        <Input
-                          type="text"
-                          placeholder="statecode_login"
-                          value={resetLogin}
-                          onChange={(event) => setResetLogin(event.target.value)}
-                        />
-                      </label>
+                        <Separator />
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full"
-                        disabled={isSubmitting}
-                        onClick={handleResetSubmit}
-                      >
-                        {isSubmitting ? "Sending..." : "Send recovery link"}
-                      </Button>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => switchMode("signup")}
+                          className="block w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          Need an account? Switch to sign up
+                        </button>
+                      </form>
+                    ) : (
+                      <form className="space-y-5" onSubmit={handleRegisterSubmit}>
+                        <div className="grid gap-4">
+                          <label className="space-y-2">
+                            <span className="text-sm font-medium">Login</span>
+                            <Input
+                              type="text"
+                              placeholder="statecode_login"
+                              value={registerForm.login}
+                              onChange={(event) =>
+                                setRegisterForm((current) => ({
+                                  ...current,
+                                  login: event.target.value
+                                }))
+                              }
+                              className="rounded-none"
+                            />
+                          </label>
+
+                          <label className="space-y-2">
+                            <span className="text-sm font-medium">Username</span>
+                            <Input
+                              type="text"
+                              placeholder="@statecoder"
+                              value={registerForm.username}
+                              onChange={(event) =>
+                                setRegisterForm((current) => ({
+                                  ...current,
+                                  username: event.target.value
+                                }))
+                              }
+                              className="rounded-none"
+                            />
+                          </label>
+
+                          <label className="space-y-2">
+                            <span className="text-sm font-medium">Password</span>
+                            <Input
+                              type="password"
+                              placeholder="********"
+                              value={registerForm.password}
+                              onChange={(event) =>
+                                setRegisterForm((current) => ({
+                                  ...current,
+                                  password: event.target.value
+                                }))
+                              }
+                              className="rounded-none"
+                            />
+                          </label>
+
+                          <label className="space-y-2">
+                            <span className="text-sm font-medium">Confirm password</span>
+                            <Input
+                              type="password"
+                              placeholder="Repeat password"
+                              value={registerForm.confirmPassword}
+                              onChange={(event) =>
+                                setRegisterForm((current) => ({
+                                  ...current,
+                                  confirmPassword: event.target.value
+                                }))
+                              }
+                              className="rounded-none"
+                            />
+                          </label>
+                        </div>
+
+                        <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            className="size-4 border border-input bg-background accent-[var(--primary)]"
+                          />
+                          I agree to the platform rules
+                        </label>
+
+                        <Button
+                          type="submit"
+                          className="w-full rounded-none"
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? "Creating..." : "Create account"}
+                          <ArrowRight className="size-4" />
+                        </Button>
+
+                        <Separator />
+
+                        <button
+                          type="button"
+                          onClick={() => switchMode("login")}
+                          className="block w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          Already registered? Switch to log in
+                        </button>
+                      </form>
+                    )}
                   </div>
-
-                  <Separator />
-
-                  <button
-                    type="button"
-                    onClick={() => switchMode("signup")}
-                    className="block w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    Don&apos;t have an account? Sign up
-                  </button>
-                </form>
-              ) : (
-                <form className="space-y-5" onSubmit={handleRegisterSubmit}>
-                  <div className="space-y-2">
-                    <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
-                    <p className="text-sm text-muted-foreground">
-                      Register to start submitting and joining contests.
-                    </p>
-                  </div>
-
-                  <label className="space-y-2">
-                    <span className="text-sm font-medium">Login</span>
-                    <Input
-                      type="text"
-                      placeholder="statecode_login"
-                      value={registerForm.login}
-                      onChange={(event) =>
-                        setRegisterForm((current) => ({
-                          ...current,
-                          login: event.target.value
-                        }))
-                      }
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-sm font-medium">Username</span>
-                    <Input
-                      type="text"
-                      placeholder="@statecoder"
-                      value={registerForm.username}
-                      onChange={(event) =>
-                        setRegisterForm((current) => ({
-                          ...current,
-                          username: event.target.value
-                        }))
-                      }
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-sm font-medium">Password</span>
-                    <Input
-                      type="password"
-                      placeholder="********"
-                      value={registerForm.password}
-                      onChange={(event) =>
-                        setRegisterForm((current) => ({
-                          ...current,
-                          password: event.target.value
-                        }))
-                      }
-                    />
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="text-sm font-medium">Confirm password</span>
-                    <Input
-                      type="password"
-                      placeholder="Repeat password"
-                      value={registerForm.confirmPassword}
-                      onChange={(event) =>
-                        setRegisterForm((current) => ({
-                          ...current,
-                          confirmPassword: event.target.value
-                        }))
-                      }
-                    />
-                  </label>
-
-                  <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      className="size-4 rounded border border-input bg-background accent-[var(--primary)]"
-                    />
-                    I agree to the platform rules
-                  </label>
-
-                  <Button type="submit" className="w-full" disabled={isSubmitting}>
-                    {isSubmitting ? "Creating..." : "Create account"}
-                    <ArrowRight className="size-4" />
-                  </Button>
-
-                  <Separator />
-
-                  <button
-                    type="button"
-                    onClick={() => switchMode("login")}
-                    className="block w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    Already have an account? Log in
-                  </button>
-                </form>
-              )}
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </section>
     </main>
   );
